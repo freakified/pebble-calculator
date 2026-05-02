@@ -10,6 +10,7 @@
 
 #define PERSIST_KEY_RPN_MODE 1
 #define PERSIST_KEY_HAPTIC_FEEDBACK 2
+#define PERSIST_KEY_MAIN_NUMBER 3
 
 // ---------------------------------------------------------------------------
 // Static state
@@ -141,6 +142,13 @@ static void prv_window_load(Window *window) {
     s_engine.rpn_mode = rpn;
   }
 
+  // Restore main number
+  if (persist_exists(PERSIST_KEY_MAIN_NUMBER)) {
+    double main_num = 0.0;
+    persist_read_data(PERSIST_KEY_MAIN_NUMBER, &main_num, sizeof(double));
+    calc_engine_set_main_number(&s_engine, main_num);
+  }
+
   // Restore haptic feedback setting
   if (persist_exists(PERSIST_KEY_HAPTIC_FEEDBACK)) {
     s_haptic_feedback = persist_read_bool(PERSIST_KEY_HAPTIC_FEEDBACK);
@@ -158,6 +166,9 @@ static void prv_window_load(Window *window) {
 }
 
 static void prv_window_unload(Window *window) {
+  double main_num = calc_engine_get_main_number(&s_engine);
+  persist_write_data(PERSIST_KEY_MAIN_NUMBER, &main_num, sizeof(double));
+
   touch_service_unsubscribe();
   calc_ui_destroy(s_ui_layer);
   s_ui_layer = NULL;

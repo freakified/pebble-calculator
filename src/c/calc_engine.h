@@ -95,3 +95,9 @@ void calc_engine_get_stack_display(CalcEngine *engine, int reg, char *buf, int b
 
 // Get the secondary display line for standard mode (pending operand + operator)
 void calc_engine_get_secondary_display(CalcEngine *engine, char *buf, int buf_size);
+
+// Get the main number (X register or current entry)
+double calc_engine_get_main_number(CalcEngine *engine);
+
+// Set the main number (X register or current entry)
+void calc_engine_set_main_number(CalcEngine *engine, double val);

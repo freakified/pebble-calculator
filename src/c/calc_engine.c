@@ -33,8 +33,11 @@ static void prv_clear_entry(CalcEngine *e) {
   e->entering = false;
 }
 
-// Parse the entry buffer to a double (hand-rolled, no strtod)
 static double prv_entry_to_double(CalcEngine *e) {
+  if (e->error || e->entry[0] == 'E') {
+    return 0.0;
+  }
+
   double result = 0.0;
   bool negative = false;
   int i = 0;
@@ -45,7 +48,7 @@ static double prv_entry_to_double(CalcEngine *e) {
   }
 
   // Integer part
-  for (; i < e->entry_len && e->entry[i] != '.'; i++) {
+  for (; i < e->entry_len && e->entry[i] != '.' && e->entry[i] != 'e'; i++) {
     result = result * 10.0 + (double)(e->entry[i] - '0');
   }
 
@@ -53,9 +56,30 @@ static double prv_entry_to_double(CalcEngine *e) {
   if (i < e->entry_len && e->entry[i] == '.') {
     i++; // skip '.'
     double frac = 0.1;
-    for (; i < e->entry_len; i++) {
+    for (; i < e->entry_len && e->entry[i] != 'e'; i++) {
       result += (double)(e->entry[i] - '0') * frac;
       frac *= 0.1;
+    }
+  }
+
+  // Exponent part
+  if (i < e->entry_len && e->entry[i] == 'e') {
+    i++; // skip 'e'
+    bool exp_neg = false;
+    if (i < e->entry_len && e->entry[i] == '-') {
+      exp_neg = true;
+      i++;
+    } else if (i < e->entry_len && e->entry[i] == '+') {
+      i++;
+    }
+    int exp = 0;
+    for (; i < e->entry_len; i++) {
+      exp = exp * 10 + (e->entry[i] - '0');
+    }
+    if (exp_neg) {
+      for (int j = 0; j < exp; j++) result /= 10.0;
+    } else {
+      for (int j = 0; j < exp; j++) result *= 10.0;
     }
   }
 
@@ -693,3 +717,15 @@ void calc_engine_get_secondary_display(CalcEngine *engine, char *buf, int buf_si
   prv_format_double(engine->pending_value, val_buf, sizeof(val_buf));
   snprintf(buf, buf_size, "%s %s", val_buf, op_str);
 }
+
+double calc_engine_get_main_number(CalcEngine *engine) {
+  return prv_entry_to_double(engine);
+}
+
+void calc_engine_set_main_number(CalcEngine *engine, double val) {
+  prv_double_to_entry(engine, val);
+  if (engine->rpn_mode) {
+    engine->stack[3] = val;
+  }
+}
+
