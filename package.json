@@ -1,5 +1,5 @@
 {
-  "name": "calculator",
+  "name": "pebble-calculator",
   "author": "freakified",
   "version": "1.0.0",
   "keywords": [
@@ -10,7 +10,7 @@
     "@rebble/clay": "^1.0.8"
   },
   "pebble": {
-    "displayName": "calculator",
+    "displayName": "Calculator",
     "uuid": "b0eafb44-78d6-49d1-bd20-c7e51abc5335",
     "sdkVersion": "3",
     "enableMultiJS": true,
@@ -25,7 +25,14 @@
       "HAPTIC_FEEDBACK"
     ],
     "resources": {
-      "media": []
+      "media": [
+        {
+          "type": "png",
+          "name": "APP_ICON",
+          "file": "images/app-icon.png",
+          "menuIcon": true
+        }
+      ]
     }
   }
 }
