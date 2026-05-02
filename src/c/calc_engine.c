@@ -591,8 +591,14 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
       return;
     }
 
+    if (engine->rpn_mode && (action == CALC_ACTION_BACKSPACE || action == CALC_ACTION_CLEAR)) {
+      prv_clear_entry(engine);
+      engine->stack[3] = 0.0;
+      engine->stack_lift_enabled = false;
+      return;
+    }
+
     if (action == CALC_ACTION_CLEAR) {
-      if (engine->rpn_mode) return;
       bool rpn = engine->rpn_mode;
       calc_engine_init(engine);
       engine->rpn_mode = rpn;
