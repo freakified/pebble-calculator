@@ -138,11 +138,12 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
     },
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
-        .label = "=",
+        .label = "",
         .rpn_label = "ENTER",
         .action = CALC_ACTION_EQUALS,
         .rpn_action = CALC_ACTION_ENTER,
         .style = BUTTON_STYLE_ENTER,
+        .icon = CALC_ICON_EQUALS,
     },
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},

@@ -154,7 +154,11 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
     GRect fill_rect = grect_inset(btn_rect, GEdgeInsets(2));
     graphics_fill_rect(ctx, fill_rect, 5, GCornersAll);
 
-    if (btn->icon != CALC_ICON_NONE) {
+    // Icons take precedence over labels, except in RPN mode when an explicit
+    // rpn_label is set (e.g. ENTER overrides the = icon).
+    bool show_icon =
+        (btn->icon != CALC_ICON_NONE) && !(rpn && btn->rpn_label != NULL);
+    if (show_icon) {
       calc_icons_draw(ctx, btn->icon, fill_rect, text, bg);
       continue;
     }
