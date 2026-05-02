@@ -74,7 +74,8 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
 // ---------------------------------------------------------------------------
 
 static void prv_select_click(ClickRecognizerRef recognizer, void *context) {
-  // TODO: add functionality
+  calc_engine_handle_action(&s_engine, CALC_ACTION_NEGATE);
+  calc_ui_mark_dirty();
 }
 
 static void prv_up_click(ClickRecognizerRef recognizer, void *context) {
@@ -85,7 +86,8 @@ static void prv_up_click(ClickRecognizerRef recognizer, void *context) {
 }
 
 static void prv_down_click(ClickRecognizerRef recognizer, void *context) {
-  // TODO: add functionality
+  calc_engine_handle_action(&s_engine, CALC_ACTION_BACKSPACE);
+  calc_ui_mark_dirty();
 }
 
 static void prv_click_config_provider(void *context) {

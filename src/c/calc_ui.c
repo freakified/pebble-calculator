@@ -103,7 +103,7 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
   graphics_context_set_text_color(ctx, COLOR_DISPLAY_SEC);
   // Negative y trims GOTHIC's top padding so the line sits flush at the top.
   graphics_draw_text(ctx, sec_buf, fonts->indicator,
-                     GRect(text_left, -4 + CALC_GRID_OFFSET_Y, text_w, 18),
+                     GRect(text_left + 4, -2 + CALC_GRID_OFFSET_Y, text_w, 18),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
                      NULL);
 
@@ -111,7 +111,7 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
   const char *x_str = calc_engine_get_x_display(s_engine);
   graphics_context_set_text_color(ctx, COLOR_DISPLAY_TEXT);
   graphics_draw_text(ctx, x_str, fonts->x_register,
-                     GRect(text_left, 8 + CALC_GRID_OFFSET_Y, text_w, 32),
+                     GRect(text_left + 6, 10 + CALC_GRID_OFFSET_Y, text_w, 32),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
                      NULL);
 }

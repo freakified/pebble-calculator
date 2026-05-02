@@ -195,9 +195,18 @@ static void prv_stack_push(CalcEngine *e, double val) {
 
 static void prv_handle_digit(CalcEngine *e, int digit) {
   if (e->error) {
-    bool rpn = e->rpn_mode;
-    calc_engine_init(e);
-    e->rpn_mode = rpn;
+    e->error = false;
+    if (!e->rpn_mode) {
+      bool rpn = e->rpn_mode;
+      calc_engine_init(e);
+      e->rpn_mode = rpn;
+    } else {
+      e->entry[0] = '0';
+      e->entry[1] = '\0';
+      e->entry_len = 1;
+      e->has_dot = false;
+      e->entering = false;
+    }
   }
 
   if (e->rpn_mode && !e->entering && e->stack_lift_enabled) {
@@ -228,6 +237,15 @@ static void prv_handle_digit(CalcEngine *e, int digit) {
     return;
   }
 
+  // Handle "-0"
+  if (e->entry_len == 2 && e->entry[0] == '-' && e->entry[1] == '0' && !e->has_dot && digit == 0) {
+    return;
+  }
+  if (e->entry_len == 2 && e->entry[0] == '-' && e->entry[1] == '0' && !e->has_dot) {
+    e->entry[1] = '0' + digit;
+    return;
+  }
+
   e->entry[e->entry_len] = '0' + digit;
   e->entry_len++;
   e->entry[e->entry_len] = '\0';
@@ -235,9 +253,18 @@ static void prv_handle_digit(CalcEngine *e, int digit) {
 
 static void prv_handle_dot(CalcEngine *e) {
   if (e->error) {
-    bool rpn = e->rpn_mode;
-    calc_engine_init(e);
-    e->rpn_mode = rpn;
+    e->error = false;
+    if (!e->rpn_mode) {
+      bool rpn = e->rpn_mode;
+      calc_engine_init(e);
+      e->rpn_mode = rpn;
+    } else {
+      e->entry[0] = '0';
+      e->entry[1] = '\0';
+      e->entry_len = 1;
+      e->has_dot = false;
+      e->entering = false;
+    }
   }
 
   if (e->rpn_mode && !e->entering && e->stack_lift_enabled) {
@@ -395,9 +422,15 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
 
   if (action == CALC_ACTION_BACKSPACE) {
     if (engine->error) {
-      bool rpn = engine->rpn_mode;
-      calc_engine_init(engine);
-      engine->rpn_mode = rpn;
+      engine->error = false;
+      if (!engine->rpn_mode) {
+        bool rpn = engine->rpn_mode;
+        calc_engine_init(engine);
+        engine->rpn_mode = rpn;
+      } else {
+        prv_clear_entry(engine);
+        engine->stack[3] = 0.0;
+      }
       return;
     }
     // Backspace only edits an in-progress entry; results are untouched
@@ -405,7 +438,10 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
     if (!engine->entering) return;
 
     if (engine->entry_len <= 1) {
-      prv_clear_entry(engine);
+      engine->entry[0] = '0';
+      engine->entry[1] = '\0';
+      engine->entry_len = 1;
+      engine->has_dot = false;
       if (engine->rpn_mode) engine->stack[3] = 0.0;
       return;
     }
@@ -416,7 +452,10 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
     engine->entry[engine->entry_len] = '\0';
     // Don't leave just "-" sitting in the buffer.
     if (engine->entry_len == 1 && engine->entry[0] == '-') {
-      prv_clear_entry(engine);
+      engine->entry[0] = '0';
+      engine->entry[1] = '\0';
+      engine->entry_len = 1;
+      engine->has_dot = false;
       if (engine->rpn_mode) engine->stack[3] = 0.0;
       return;
     }
@@ -444,12 +483,24 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
   // Negate
   if (action == CALC_ACTION_NEGATE) {
     if (engine->error) return;
-    double val = prv_entry_to_double(engine);
-    val = -val;
-    prv_double_to_entry(engine, val);
-    engine->entering = true; // keep in entry mode
+    if (engine->entering) {
+      if (engine->entry[0] == '-') {
+        memmove(engine->entry, engine->entry + 1, engine->entry_len);
+        engine->entry_len--;
+      } else {
+        if (engine->entry_len < CALC_DISPLAY_MAX - 1) {
+          memmove(engine->entry + 1, engine->entry, engine->entry_len + 1);
+          engine->entry[0] = '-';
+          engine->entry_len++;
+        }
+      }
+    } else {
+      double val = prv_entry_to_double(engine);
+      val = -val;
+      prv_double_to_entry(engine, val);
+    }
     if (engine->rpn_mode) {
-      engine->stack[3] = val;
+      engine->stack[3] = prv_entry_to_double(engine);
     }
     return;
   }
@@ -487,6 +538,7 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
   }
 
   if (action == CALC_ACTION_DROP) {
+    if (engine->error) engine->error = false;
     if (engine->rpn_mode) prv_rpn_drop(engine);
     return;
   }
