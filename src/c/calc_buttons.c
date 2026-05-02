@@ -164,7 +164,7 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
     .rpn_label  = "ENT",
     .action     = CALC_ACTION_EQUALS,
     .rpn_action = CALC_ACTION_ENTER,
-    .style      = BUTTON_STYLE_OPERATOR,
+    .style      = BUTTON_STYLE_ENTER,
   },
 };
 

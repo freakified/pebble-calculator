@@ -8,6 +8,7 @@ typedef enum {
   BUTTON_STYLE_NUMBER,    // Light gray bg, black text
   BUTTON_STYLE_OPERATOR,  // Orange bg, white text
   BUTTON_STYLE_FUNCTION,  // Dark gray bg, white text
+  BUTTON_STYLE_ENTER,     // Special style for Enter/Equals
 } CalcButtonStyle;
 
 // A single button definition
