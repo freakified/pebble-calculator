@@ -75,7 +75,7 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
     },
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
-        .label = "×",
+        .label = "✖️",
         .rpn_label = NULL,
         .action = CALC_ACTION_MULTIPLY,
         .rpn_action = CALC_ACTION_MULTIPLY,
@@ -154,10 +154,10 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
     // calc_buttons_init.
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
-        .label = "AC",
-        .rpn_label = "DROP",
+        .label = "C",
+        .rpn_label = NULL,
         .action = CALC_ACTION_CLEAR,
-        .rpn_action = CALC_ACTION_DROP,
+        .rpn_action = CALC_ACTION_CLEAR,
         .style = BUTTON_STYLE_CLEAR,
     },
 };
