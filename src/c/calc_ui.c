@@ -2,6 +2,7 @@
 #include "calc_buttons.h"
 #include "calc_fonts.h"
 #include <stdio.h>
+#include <string.h>
 
 // ---------------------------------------------------------------------------
 // Layout constants (grid dimensions live in calc_buttons.h)
@@ -109,9 +110,19 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
                      NULL);
 
   // Primary line: X register, large.
+  // Font tiers: ≤7 digits → LECO 32 Bold, 8+ digits or sci notation → GOTHIC 28 Bold.
   const char *x_str = calc_engine_get_x_display(s_engine);
+  int digit_count = 0;
+  for (const char *p = x_str; *p; p++) {
+    if (*p >= '0' && *p <= '9') digit_count++;
+  }
+  bool use_gothic = (digit_count > CALC_X_MAX_DIGITS_LECO) ||
+                    (strchr(x_str, 'e') != NULL);
+  GFont x_font = use_gothic
+      ? fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD)
+      : fonts->x_register;
   graphics_context_set_text_color(ctx, COLOR_DISPLAY_TEXT);
-  graphics_draw_text(ctx, x_str, fonts->x_register,
+  graphics_draw_text(ctx, x_str, x_font,
                      GRect(text_left, 10 + CALC_GRID_OFFSET_Y, text_w, 32),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
                      NULL);

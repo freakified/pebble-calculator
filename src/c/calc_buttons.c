@@ -75,7 +75,7 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
     },
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
-        .label = "x",
+        .label = "×",
         .rpn_label = NULL,
         .action = CALC_ACTION_MULTIPLY,
         .rpn_action = CALC_ACTION_MULTIPLY,

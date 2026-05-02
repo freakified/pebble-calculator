@@ -16,6 +16,15 @@ static bool prv_is_error(double x) {
   return prv_fabs(x) > 9.999e15;
 }
 
+// Count digit characters (0-9) in a string
+static int prv_count_digits(const char *s, int len) {
+  int count = 0;
+  for (int i = 0; i < len; i++) {
+    if (s[i] >= '0' && s[i] <= '9') count++;
+  }
+  return count;
+}
+
 static void prv_clear_entry(CalcEngine *e) {
   e->entry[0] = '0';
   e->entry[1] = '\0';
@@ -53,7 +62,88 @@ static double prv_entry_to_double(CalcEngine *e) {
   return negative ? -result : result;
 }
 
-// Format a double into the entry buffer (hand-rolled, no %g)
+// Format a double into scientific notation in the entry buffer.
+// Target max length: CALC_SCI_MAX_CHARS.  Format: [-]D.DDDeDD
+static void prv_format_scientific(CalcEngine *e, double val) {
+  char buf[CALC_DISPLAY_MAX + 1];
+  int pos = 0;
+  bool negative = false;
+
+  if (val < 0.0) {
+    negative = true;
+    val = -val;
+  }
+
+  // Find exponent: val = mantissa * 10^exp, 1.0 <= mantissa < 10.0
+  int exp = 0;
+  double mantissa = val;
+  if (val >= 10.0) {
+    while (mantissa >= 10.0) { mantissa /= 10.0; exp++; }
+  } else if (val > 0.0 && val < 1.0) {
+    while (mantissa < 1.0) { mantissa *= 10.0; exp--; }
+  }
+
+  if (negative) buf[pos++] = '-';
+
+  // First mantissa digit
+  int first = (int)mantissa;
+  if (first > 9) first = 9;
+  buf[pos++] = '0' + (char)first;
+  mantissa -= (double)first;
+
+  // Figure out how many chars the exponent part will take
+  int abs_exp = exp < 0 ? -exp : exp;
+  int exp_chars = 1; // 'e'
+  if (exp < 0) exp_chars++; // '-'
+  if (abs_exp >= 100) exp_chars += 3;
+  else if (abs_exp >= 10) exp_chars += 2;
+  else exp_chars += 1;
+
+  // Available decimal mantissa digits
+  int avail = CALC_SCI_MAX_CHARS - pos - exp_chars - 1; // -1 for '.'
+  if (avail < 0) avail = 0;
+
+  if (avail > 0 && mantissa > 0.0000001) {
+    buf[pos++] = '.';
+    for (int d = 0; d < avail; d++) {
+      mantissa *= 10.0;
+      int digit = (int)mantissa;
+      if (digit > 9) digit = 9;
+      buf[pos++] = '0' + (char)digit;
+      mantissa -= (double)digit;
+    }
+    // Trim trailing zeros
+    while (pos > 0 && buf[pos - 1] == '0') pos--;
+    if (pos > 0 && buf[pos - 1] == '.') pos--;
+  }
+
+  // Append 'e' and exponent
+  buf[pos++] = 'e';
+  if (exp < 0) {
+    buf[pos++] = '-';
+    exp = -exp;
+  }
+  if (exp >= 100) {
+    buf[pos++] = '0' + (char)(exp / 100);
+    buf[pos++] = '0' + (char)((exp / 10) % 10);
+    buf[pos++] = '0' + (char)(exp % 10);
+  } else if (exp >= 10) {
+    buf[pos++] = '0' + (char)(exp / 10);
+    buf[pos++] = '0' + (char)(exp % 10);
+  } else {
+    buf[pos++] = '0' + (char)exp;
+  }
+
+  buf[pos] = '\0';
+  memcpy(e->entry, buf, pos + 1);
+  e->entry_len = pos;
+  e->has_dot = (memchr(e->entry, '.', pos) != NULL);
+  e->entering = false;
+}
+
+// Format a double into the entry buffer (hand-rolled, no %g).
+// Uses scientific notation for values too large or too small to display
+// as plain numbers within CALC_X_MAX_DIGITS digit characters.
 static void prv_double_to_entry(CalcEngine *e, double val) {
   char buf[CALC_DISPLAY_MAX + 1];
   int pos = 0;
@@ -64,8 +154,8 @@ static void prv_double_to_entry(CalcEngine *e, double val) {
     val = -val;
   }
 
-  // Check for very large values
-  if (val > 999999999999.0) {
+  // True error: beyond useful double range (e.g. div-by-zero overflow)
+  if (val > 9.999e15) {
     snprintf(e->entry, sizeof(e->entry), "Error");
     e->entry_len = 5;
     e->has_dot = false;
@@ -74,15 +164,32 @@ static void prv_double_to_entry(CalcEngine *e, double val) {
     return;
   }
 
-  // Extract integer part
+  // How many digit slots do we have? (GOTHIC 28 threshold; LECO/GOTHIC
+  // font selection is handled by the UI based on the resulting digit count)
+  int max_digits = negative ? (CALC_X_MAX_DIGITS_GOTHIC - 1) : CALC_X_MAX_DIGITS_GOTHIC;
+
+  // Count integer digits needed
   long long int_part = (long long)val;
-  double frac_part = val - (double)int_part;
+  int int_digit_count = 0;
+  {
+    long long n = int_part;
+    if (n == 0) {
+      int_digit_count = 1;
+    } else {
+      while (n > 0) { int_digit_count++; n /= 10; }
+    }
+  }
+
+  // Use scientific notation if integer part won't fit
+  if (int_digit_count > max_digits) {
+    prv_format_scientific(e, negative ? -val : val);
+    return;
+  }
 
   // Format integer part
   if (int_part == 0) {
     buf[pos++] = '0';
   } else {
-    // Convert integer to string (reverse)
     char tmp[16];
     int tmp_len = 0;
     long long n = int_part;
@@ -91,16 +198,20 @@ static void prv_double_to_entry(CalcEngine *e, double val) {
       n /= 10;
     }
     for (int j = tmp_len - 1; j >= 0; j--) {
-      if (pos < CALC_DISPLAY_MAX) buf[pos++] = tmp[j];
+      buf[pos++] = tmp[j];
     }
   }
 
-  // Format fractional part (up to 8 digits, trim trailing zeros)
-  if (frac_part > 0.0000000005) {
+  // Format fractional part, capped so total digits <= max_digits
+  double frac_part = val - (double)int_part;
+  int digits_used = int_digit_count;
+  int max_frac = max_digits - digits_used;
+
+  if (frac_part > 0.0000000005 && max_frac > 0) {
     char frac_digits[10];
     int frac_len = 0;
     double f = frac_part;
-    for (int d = 0; d < 8 && pos + 1 + frac_len < CALC_DISPLAY_MAX; d++) {
+    for (int d = 0; d < max_frac && d < 9; d++) {
       f *= 10.0;
       int digit = (int)f;
       if (digit > 9) digit = 9;
@@ -115,17 +226,22 @@ static void prv_double_to_entry(CalcEngine *e, double val) {
 
     if (frac_len > 0) {
       buf[pos++] = '.';
-      for (int j = 0; j < frac_len && pos < CALC_DISPLAY_MAX; j++) {
+      for (int j = 0; j < frac_len; j++) {
         buf[pos++] = frac_digits[j];
       }
     }
+  }
+
+  // Check if a small nonzero value rounded to "0" — use sci notation instead
+  if (val > 0.0 && pos == 1 && buf[0] == '0') {
+    prv_format_scientific(e, negative ? -val : val);
+    return;
   }
 
   buf[pos] = '\0';
 
   // Prepend negative sign
   if (negative && !(pos == 1 && buf[0] == '0')) {
-    // Shift right and add '-'
     if (pos + 1 < CALC_DISPLAY_MAX) {
       for (int j = pos; j >= 0; j--) {
         buf[j + 1] = buf[j];
@@ -225,7 +341,9 @@ static void prv_handle_digit(CalcEngine *e, int digit) {
   }
 
   // Already entering — append digit
-  if (e->entry_len >= CALC_DISPLAY_MAX - 1) return; // too long
+  // Cap digits to what fits on display (sign takes one digit slot)
+  int max_digits = (e->entry[0] == '-') ? (CALC_X_MAX_DIGITS_GOTHIC - 1) : CALC_X_MAX_DIGITS_GOTHIC;
+  if (prv_count_digits(e->entry, e->entry_len) >= max_digits) return;
 
   // Don't allow leading zeros (unless after decimal)
   if (e->entry_len == 1 && e->entry[0] == '0' && !e->has_dot && digit == 0) {
@@ -282,7 +400,7 @@ static void prv_handle_dot(CalcEngine *e) {
   }
 
   if (e->has_dot) return;
-  if (e->entry_len >= CALC_DISPLAY_MAX - 1) return;
+  if (e->entry_len >= CALC_DISPLAY_MAX - 1) return; // buffer safety cap
 
   e->entry[e->entry_len] = '.';
   e->entry_len++;

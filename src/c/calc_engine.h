@@ -2,8 +2,20 @@
 
 #include <pebble.h>
 
-// Maximum digits in the display buffer (including decimal point and sign)
-#define CALC_DISPLAY_MAX 14
+// Maximum characters in the display buffer (must hold 13 digits + sign + dot + null)
+#define CALC_DISPLAY_MAX 16
+
+// Max digit characters (0-9) that fit in the X display with LECO 32 Bold.
+// The decimal point is narrower and doesn't consume a digit slot.
+// The minus sign DOES consume one digit slot.
+#define CALC_X_MAX_DIGITS_LECO 7
+
+// Max digit characters that fit with GOTHIC 28 Bold (used when overflowing LECO).
+// Beyond this count, scientific notation kicks in.
+#define CALC_X_MAX_DIGITS_GOTHIC 13
+
+// Max characters for scientific notation display (rendered in GOTHIC 28 Bold)
+#define CALC_SCI_MAX_CHARS 10
 
 // Actions that buttons can trigger
 typedef enum {
