@@ -74,29 +74,18 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
 // ---------------------------------------------------------------------------
 
 static void prv_select_click(ClickRecognizerRef recognizer, void *context) {
-  // Select = Equals (standard) or Enter (RPN)
-  if (s_engine.rpn_mode) {
-    calc_engine_handle_action(&s_engine, CALC_ACTION_ENTER);
-  } else {
-    calc_engine_handle_action(&s_engine, CALC_ACTION_EQUALS);
-  }
-  calc_ui_mark_dirty();
+  // TODO: add functionality
 }
 
 static void prv_up_click(ClickRecognizerRef recognizer, void *context) {
-  // Up = SWAP (RPN) or Negate (standard)
   if (s_engine.rpn_mode) {
     calc_engine_handle_action(&s_engine, CALC_ACTION_SWAP);
-  } else {
-    calc_engine_handle_action(&s_engine, CALC_ACTION_NEGATE);
+    calc_ui_mark_dirty();
   }
-  calc_ui_mark_dirty();
 }
 
 static void prv_down_click(ClickRecognizerRef recognizer, void *context) {
-  // Down = Clear
-  calc_engine_handle_action(&s_engine, CALC_ACTION_CLEAR);
-  calc_ui_mark_dirty();
+  // TODO: add functionality
 }
 
 static void prv_click_config_provider(void *context) {

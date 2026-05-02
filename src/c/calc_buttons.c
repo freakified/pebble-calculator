@@ -12,7 +12,7 @@
 //   0    .    =(ENTER)    +
 //
 // C/DROP: fires CLEAR (standard) or DROP (RPN).
-// Physical buttons: SELECT = =/ENTER, UP = ±/SWAP, DOWN = CLEAR.
+// Physical buttons: UP = SWAP (RPN only).
 static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
     // Grid row 1: 7, 8, 9, ÷
     {
