@@ -8,9 +8,8 @@
 typedef enum {
   BUTTON_STYLE_NUMBER,    // Light gray bg, black text
   BUTTON_STYLE_OPERATOR,  // Orange bg, white text
-  BUTTON_STYLE_FUNCTION,  // Dark gray bg, white text
   BUTTON_STYLE_ENTER,     // Special style for Enter/Equals
-  BUTTON_STYLE_CLEAR,     // AC/DROP button: light gray bg, red text
+  BUTTON_STYLE_CLEAR,     // C / clear-X button: light gray bg, red text
 } CalcButtonStyle;
 
 // A single button definition
@@ -35,11 +34,12 @@ typedef struct {
 #define CALC_GRID_OFFSET_Y 3        // pushes grid down so the 3px gap is at the top
 #define CALC_DISPLAY_HEIGHT CALC_CELL_H
 
-// Number of buttons (16 number/operator buttons + 1 C/DROP).
+// Number of buttons (16 number/operator buttons + 1 C/CLx).
 #define CALC_BUTTON_COUNT 17
 
-// Index of the C/DROP button (lives in grid cell (0, 0)).
-// Fires CLEAR in standard mode, DROP in RPN mode.
+// Index of the C / clear-X button (lives in grid cell (0, 0)).
+// Fires CLEAR in standard mode; in RPN mode acts as backspace while typing
+// or clear-X (CLx) when no entry is in progress.
 #define CALC_BUTTON_INDEX_CL 16
 
 // Initialize button layout (call once)

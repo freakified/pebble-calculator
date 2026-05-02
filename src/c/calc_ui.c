@@ -24,16 +24,11 @@
 #define COLOR_OP_BG GColorOrange
 #define COLOR_OP_TEXT GColorWhite
 
-#define COLOR_FUNC_BG GColorMelon
-#define COLOR_FUNC_TEXT GColorBlack
-
 #define COLOR_CLEAR_BG GColorMelon
 #define COLOR_CLEAR_TEXT GColorDarkCandyAppleRed
 
 #define COLOR_ENT_BG GColorBlue
 #define COLOR_ENT_TEXT GColorWhite
-
-#define COLOR_GRID_BORDER GColorWhite
 
 // ---------------------------------------------------------------------------
 // Static state
@@ -63,10 +58,6 @@ static void prv_get_button_colors(const CalcButton *btn, bool pressed,
   case BUTTON_STYLE_OPERATOR:
     *bg = COLOR_OP_BG;
     *text = COLOR_OP_TEXT;
-    break;
-  case BUTTON_STYLE_FUNCTION:
-    *bg = COLOR_FUNC_BG;
-    *text = COLOR_FUNC_TEXT;
     break;
   case BUTTON_STYLE_ENTER:
     *bg = COLOR_ENT_BG;

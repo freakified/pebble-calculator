@@ -10,13 +10,6 @@
 // The minus sign DOES consume one digit slot.
 #define CALC_X_MAX_DIGITS_LECO 7
 
-// Max digit characters that fit with GOTHIC 28 Bold (used when overflowing LECO).
-// Beyond this count, scientific notation kicks in.
-#define CALC_X_MAX_DIGITS_GOTHIC 13
-
-// Max characters for scientific notation display (rendered in GOTHIC 28 Bold)
-#define CALC_SCI_MAX_CHARS 10
-
 // Actions that buttons can trigger
 typedef enum {
   CALC_ACTION_DIGIT_0 = 0,
@@ -34,15 +27,13 @@ typedef enum {
   CALC_ACTION_SUBTRACT,
   CALC_ACTION_MULTIPLY,
   CALC_ACTION_DIVIDE,
-  CALC_ACTION_PERCENT,
   CALC_ACTION_NEGATE,
   CALC_ACTION_EQUALS,    // Standard mode: evaluate
-  CALC_ACTION_CLEAR,     // C
+  CALC_ACTION_CLEAR,     // C (or clear-X in RPN mode)
   CALC_ACTION_BACKSPACE, // Remove last char from current entry
   // RPN-specific
   CALC_ACTION_ENTER,     // Push X onto stack
   CALC_ACTION_SWAP,      // Swap X <-> Y
-  CALC_ACTION_DROP,      // Drop X
 } CalcAction;
 
 // Pending operator for standard mode

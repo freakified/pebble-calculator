@@ -1,4 +1,5 @@
 #include "calc_engine.h"
+#include "calc_format.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -10,13 +11,11 @@ static double prv_fabs(double x) {
   return x < 0.0 ? -x : x;
 }
 
-// Simple error flag value — we use a very large magnitude as "error"
 #define ERROR_VALUE 1e18
 static bool prv_is_error(double x) {
   return prv_fabs(x) > 9.999e15;
 }
 
-// Count digit characters (0-9) in a string
 static int prv_count_digits(const char *s, int len) {
   int count = 0;
   for (int i = 0; i < len; i++) {
@@ -34,263 +33,16 @@ static void prv_clear_entry(CalcEngine *e) {
 }
 
 static double prv_entry_to_double(CalcEngine *e) {
-  if (e->error || e->entry[0] == 'E') {
-    return 0.0;
-  }
-
-  double result = 0.0;
-  bool negative = false;
-  int i = 0;
-
-  if (e->entry[0] == '-') {
-    negative = true;
-    i = 1;
-  }
-
-  // Integer part
-  for (; i < e->entry_len && e->entry[i] != '.' && e->entry[i] != 'e'; i++) {
-    result = result * 10.0 + (double)(e->entry[i] - '0');
-  }
-
-  // Fractional part
-  if (i < e->entry_len && e->entry[i] == '.') {
-    i++; // skip '.'
-    double frac = 0.1;
-    for (; i < e->entry_len && e->entry[i] != 'e'; i++) {
-      result += (double)(e->entry[i] - '0') * frac;
-      frac *= 0.1;
-    }
-  }
-
-  // Exponent part
-  if (i < e->entry_len && e->entry[i] == 'e') {
-    i++; // skip 'e'
-    bool exp_neg = false;
-    if (i < e->entry_len && e->entry[i] == '-') {
-      exp_neg = true;
-      i++;
-    } else if (i < e->entry_len && e->entry[i] == '+') {
-      i++;
-    }
-    int exp = 0;
-    for (; i < e->entry_len; i++) {
-      exp = exp * 10 + (e->entry[i] - '0');
-    }
-    if (exp_neg) {
-      for (int j = 0; j < exp; j++) result /= 10.0;
-    } else {
-      for (int j = 0; j < exp; j++) result *= 10.0;
-    }
-  }
-
-  return negative ? -result : result;
+  if (e->error || e->entry[0] == 'E') return 0.0;
+  return calc_format_parse(e->entry, e->entry_len);
 }
 
-// Format a double into scientific notation in the entry buffer.
-// Target max length: CALC_SCI_MAX_CHARS.  Format: [-]D.DDDeDD
-static void prv_format_scientific(CalcEngine *e, double val) {
-  char buf[CALC_DISPLAY_MAX + 1];
-  int pos = 0;
-  bool negative = false;
-
-  if (val < 0.0) {
-    negative = true;
-    val = -val;
-  }
-
-  // Find exponent: val = mantissa * 10^exp, 1.0 <= mantissa < 10.0
-  int exp = 0;
-  double mantissa = val;
-  if (val >= 10.0) {
-    while (mantissa >= 10.0) { mantissa /= 10.0; exp++; }
-  } else if (val > 0.0 && val < 1.0) {
-    while (mantissa < 1.0) { mantissa *= 10.0; exp--; }
-  }
-
-  if (negative) buf[pos++] = '-';
-
-  // First mantissa digit
-  int first = (int)mantissa;
-  if (first > 9) first = 9;
-  buf[pos++] = '0' + (char)first;
-  mantissa -= (double)first;
-
-  // Figure out how many chars the exponent part will take
-  int abs_exp = exp < 0 ? -exp : exp;
-  int exp_chars = 1; // 'e'
-  if (exp < 0) exp_chars++; // '-'
-  if (abs_exp >= 100) exp_chars += 3;
-  else if (abs_exp >= 10) exp_chars += 2;
-  else exp_chars += 1;
-
-  // Available decimal mantissa digits
-  int avail = CALC_SCI_MAX_CHARS - pos - exp_chars - 1; // -1 for '.'
-  if (avail < 0) avail = 0;
-
-  if (avail > 0 && mantissa > 0.0000001) {
-    buf[pos++] = '.';
-    for (int d = 0; d < avail; d++) {
-      mantissa *= 10.0;
-      int digit = (int)mantissa;
-      if (digit > 9) digit = 9;
-      buf[pos++] = '0' + (char)digit;
-      mantissa -= (double)digit;
-    }
-    // Trim trailing zeros
-    while (pos > 0 && buf[pos - 1] == '0') pos--;
-    if (pos > 0 && buf[pos - 1] == '.') pos--;
-  }
-
-  // Append 'e' and exponent
-  buf[pos++] = 'e';
-  if (exp < 0) {
-    buf[pos++] = '-';
-    exp = -exp;
-  }
-  if (exp >= 100) {
-    buf[pos++] = '0' + (char)(exp / 100);
-    buf[pos++] = '0' + (char)((exp / 10) % 10);
-    buf[pos++] = '0' + (char)(exp % 10);
-  } else if (exp >= 10) {
-    buf[pos++] = '0' + (char)(exp / 10);
-    buf[pos++] = '0' + (char)(exp % 10);
-  } else {
-    buf[pos++] = '0' + (char)exp;
-  }
-
-  buf[pos] = '\0';
-  memcpy(e->entry, buf, pos + 1);
-  e->entry_len = pos;
-  e->has_dot = (memchr(e->entry, '.', pos) != NULL);
-  e->entering = false;
-}
-
-// Format a double into the entry buffer (hand-rolled, no %g).
-// Uses scientific notation for values too large or too small to display
-// as plain numbers within CALC_X_MAX_DIGITS digit characters.
 static void prv_double_to_entry(CalcEngine *e, double val) {
-  char buf[CALC_DISPLAY_MAX + 1];
-  int pos = 0;
-  bool negative = false;
-
-  if (val < 0.0) {
-    negative = true;
-    val = -val;
-  }
-
-  // True error: beyond useful double range (e.g. div-by-zero overflow)
-  if (val > 9.999e15) {
-    snprintf(e->entry, sizeof(e->entry), "Error");
-    e->entry_len = 5;
-    e->has_dot = false;
-    e->entering = false;
-    e->error = true;
-    return;
-  }
-
-  // How many digit slots do we have? (GOTHIC 28 threshold; LECO/GOTHIC
-  // font selection is handled by the UI based on the resulting digit count)
-  int max_digits = negative ? (CALC_X_MAX_DIGITS_GOTHIC - 1) : CALC_X_MAX_DIGITS_GOTHIC;
-
-  // Count integer digits needed
-  long long int_part = (long long)val;
-  int int_digit_count = 0;
-  {
-    long long n = int_part;
-    if (n == 0) {
-      int_digit_count = 1;
-    } else {
-      while (n > 0) { int_digit_count++; n /= 10; }
-    }
-  }
-
-  // Use scientific notation if integer part won't fit
-  if (int_digit_count > max_digits) {
-    prv_format_scientific(e, negative ? -val : val);
-    return;
-  }
-
-  // Format integer part
-  if (int_part == 0) {
-    buf[pos++] = '0';
-  } else {
-    char tmp[16];
-    int tmp_len = 0;
-    long long n = int_part;
-    while (n > 0 && tmp_len < 15) {
-      tmp[tmp_len++] = '0' + (char)(n % 10);
-      n /= 10;
-    }
-    for (int j = tmp_len - 1; j >= 0; j--) {
-      buf[pos++] = tmp[j];
-    }
-  }
-
-  // Format fractional part, capped so total digits <= max_digits
-  double frac_part = val - (double)int_part;
-  int digits_used = int_digit_count;
-  int max_frac = max_digits - digits_used;
-
-  if (frac_part > 0.0000000005 && max_frac > 0) {
-    char frac_digits[10];
-    int frac_len = 0;
-    double f = frac_part;
-    for (int d = 0; d < max_frac && d < 9; d++) {
-      f *= 10.0;
-      int digit = (int)f;
-      if (digit > 9) digit = 9;
-      frac_digits[frac_len++] = '0' + (char)digit;
-      f -= (double)digit;
-    }
-
-    // Trim trailing zeros
-    while (frac_len > 0 && frac_digits[frac_len - 1] == '0') {
-      frac_len--;
-    }
-
-    if (frac_len > 0) {
-      buf[pos++] = '.';
-      for (int j = 0; j < frac_len; j++) {
-        buf[pos++] = frac_digits[j];
-      }
-    }
-  }
-
-  // Check if a small nonzero value rounded to "0" — use sci notation instead
-  if (val > 0.0 && pos == 1 && buf[0] == '0') {
-    prv_format_scientific(e, negative ? -val : val);
-    return;
-  }
-
-  buf[pos] = '\0';
-
-  // Prepend negative sign
-  if (negative && !(pos == 1 && buf[0] == '0')) {
-    if (pos + 1 < CALC_DISPLAY_MAX) {
-      for (int j = pos; j >= 0; j--) {
-        buf[j + 1] = buf[j];
-      }
-      buf[0] = '-';
-      pos++;
-    }
-  }
-
-  memcpy(e->entry, buf, pos + 1);
-  e->entry_len = pos;
-  e->has_dot = (memchr(e->entry, '.', pos) != NULL);
+  bool overflow = false;
+  e->entry_len = calc_format_double(val, e->entry, &overflow);
+  e->has_dot = (memchr(e->entry, '.', e->entry_len) != NULL);
   e->entering = false;
-}
-
-// Format a double into an external buffer
-static void prv_format_double(double val, char *buf, int buf_size) {
-  // Reuse the entry formatter via a temporary engine
-  CalcEngine tmp;
-  memset(&tmp, 0, sizeof(tmp));
-  prv_double_to_entry(&tmp, val);
-  int len = tmp.entry_len;
-  if (len >= buf_size) len = buf_size - 1;
-  memcpy(buf, tmp.entry, len);
-  buf[len] = '\0';
+  if (overflow) e->error = true;
 }
 
 static void prv_set_error(CalcEngine *e) {
@@ -298,6 +50,18 @@ static void prv_set_error(CalcEngine *e) {
   snprintf(e->entry, sizeof(e->entry), "Error");
   e->entry_len = 5;
   e->entering = false;
+}
+
+// Recover from error state in response to a digit/dot keypress: standard mode
+// fully re-initializes; RPN keeps the stack so the user can resume from the
+// pre-error operands (T/Z/Y intact, X gets the new entry).
+static void prv_recover_from_error(CalcEngine *e) {
+  e->error = false;
+  if (!e->rpn_mode) {
+    calc_engine_init(e);
+  } else {
+    prv_clear_entry(e);
+  }
 }
 
 static double prv_apply_op(double left, CalcOp op, double right) {
@@ -334,20 +98,7 @@ static void prv_stack_push(CalcEngine *e, double val) {
 // ---------------------------------------------------------------------------
 
 static void prv_handle_digit(CalcEngine *e, int digit) {
-  if (e->error) {
-    e->error = false;
-    if (!e->rpn_mode) {
-      bool rpn = e->rpn_mode;
-      calc_engine_init(e);
-      e->rpn_mode = rpn;
-    } else {
-      e->entry[0] = '0';
-      e->entry[1] = '\0';
-      e->entry_len = 1;
-      e->has_dot = false;
-      e->entering = false;
-    }
-  }
+  if (e->error) prv_recover_from_error(e);
 
   if (e->rpn_mode && !e->entering && e->stack_lift_enabled) {
     // Lift the stack before starting new entry
@@ -366,7 +117,7 @@ static void prv_handle_digit(CalcEngine *e, int digit) {
 
   // Already entering — append digit
   // Cap digits to what fits on display (sign takes one digit slot)
-  int max_digits = (e->entry[0] == '-') ? (CALC_X_MAX_DIGITS_GOTHIC - 1) : CALC_X_MAX_DIGITS_GOTHIC;
+  int max_digits = (e->entry[0] == '-') ? (CALC_FORMAT_MAX_DIGITS - 1) : CALC_FORMAT_MAX_DIGITS;
   if (prv_count_digits(e->entry, e->entry_len) >= max_digits) return;
 
   // Don't allow leading zeros (unless after decimal)
@@ -394,20 +145,7 @@ static void prv_handle_digit(CalcEngine *e, int digit) {
 }
 
 static void prv_handle_dot(CalcEngine *e) {
-  if (e->error) {
-    e->error = false;
-    if (!e->rpn_mode) {
-      bool rpn = e->rpn_mode;
-      calc_engine_init(e);
-      e->rpn_mode = rpn;
-    } else {
-      e->entry[0] = '0';
-      e->entry[1] = '\0';
-      e->entry_len = 1;
-      e->has_dot = false;
-      e->entering = false;
-    }
-  }
+  if (e->error) prv_recover_from_error(e);
 
   if (e->rpn_mode && !e->entering && e->stack_lift_enabled) {
     prv_stack_push(e, prv_entry_to_double(e));
@@ -526,14 +264,12 @@ static void prv_rpn_swap(CalcEngine *e) {
   e->stack_lift_enabled = true;
 }
 
-static void prv_rpn_drop(CalcEngine *e) {
-  // Drop X, shift down
-  e->stack[3] = e->stack[2];
-  e->stack[2] = e->stack[1];
-  e->stack[1] = e->stack[0];
-  // T stays
-  prv_double_to_entry(e, e->stack[3]);
-  e->stack_lift_enabled = true;
+// In RPN mode, BACKSPACE/CLEAR when there's no entry in progress clears X
+// (HP-style "CLx") rather than dropping the stack — Y/Z/T are preserved.
+static void prv_rpn_clear_x(CalcEngine *e) {
+  prv_clear_entry(e);
+  e->stack[3] = 0.0;
+  e->stack_lift_enabled = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -548,23 +284,19 @@ void calc_engine_init(CalcEngine *engine) {
 }
 
 void calc_engine_set_rpn_mode(CalcEngine *engine, bool rpn) {
-  engine->rpn_mode = rpn;
   calc_engine_init(engine);
-  engine->rpn_mode = rpn; // restore after init clears it
+  engine->rpn_mode = rpn;
 }
 
 void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
-  bool is_clear_or_drop = (action == CALC_ACTION_CLEAR || action == CALC_ACTION_DROP);
-  if (action == CALC_ACTION_BACKSPACE || is_clear_or_drop) {
+  // Backspace / Clear
+  if (action == CALC_ACTION_BACKSPACE || action == CALC_ACTION_CLEAR) {
     if (engine->error) {
-      engine->error = false;
-      if (!engine->rpn_mode && (action == CALC_ACTION_CLEAR || action == CALC_ACTION_BACKSPACE)) {
-        bool rpn = engine->rpn_mode;
-        calc_engine_init(engine);
-        engine->rpn_mode = rpn;
+      if (engine->rpn_mode) {
+        engine->error = false;
+        prv_rpn_clear_x(engine);
       } else {
-        prv_clear_entry(engine);
-        engine->stack[3] = 0.0;
+        calc_engine_init(engine);
       }
       return;
     }
@@ -591,23 +323,12 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
       return;
     }
 
-    if (engine->rpn_mode && (action == CALC_ACTION_BACKSPACE || action == CALC_ACTION_CLEAR)) {
-      prv_clear_entry(engine);
-      engine->stack[3] = 0.0;
-      engine->stack_lift_enabled = false;
-      return;
-    }
-
-    if (action == CALC_ACTION_CLEAR) {
-      bool rpn = engine->rpn_mode;
+    // Not entering, no error
+    if (engine->rpn_mode) {
+      prv_rpn_clear_x(engine);
+    } else if (action == CALC_ACTION_CLEAR) {
       calc_engine_init(engine);
-      engine->rpn_mode = rpn;
-      return;
-    } else if (action == CALC_ACTION_DROP) {
-      if (engine->rpn_mode) prv_rpn_drop(engine);
-      return;
     }
-
     return;
   }
 
@@ -682,7 +403,6 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
     if (engine->rpn_mode) prv_rpn_swap(engine);
     return;
   }
-
 }
 
 const char *calc_engine_get_x_display(CalcEngine *engine) {
@@ -690,12 +410,11 @@ const char *calc_engine_get_x_display(CalcEngine *engine) {
 }
 
 void calc_engine_get_stack_display(CalcEngine *engine, int reg, char *buf, int buf_size) {
-  if (reg < 0 || reg > 2) {
+  if (reg < 0 || reg > 2 || buf_size < CALC_FORMAT_BUF_SIZE) {
     buf[0] = '\0';
     return;
   }
-  double val = engine->stack[reg]; // 0=T, 1=Z, 2=Y
-  prv_format_double(val, buf, buf_size);
+  calc_format_double(engine->stack[reg], buf, NULL);
 }
 
 void calc_engine_get_secondary_display(CalcEngine *engine, char *buf, int buf_size) {
@@ -719,8 +438,8 @@ void calc_engine_get_secondary_display(CalcEngine *engine, char *buf, int buf_si
     default: break;
   }
 
-  char val_buf[CALC_DISPLAY_MAX + 1];
-  prv_format_double(engine->pending_value, val_buf, sizeof(val_buf));
+  char val_buf[CALC_FORMAT_BUF_SIZE];
+  calc_format_double(engine->pending_value, val_buf, NULL);
   snprintf(buf, buf_size, "%s %s", val_buf, op_str);
 }
 
@@ -734,4 +453,3 @@ void calc_engine_set_main_number(CalcEngine *engine, double val) {
     engine->stack[3] = val;
   }
 }
-

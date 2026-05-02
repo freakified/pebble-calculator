@@ -5,14 +5,15 @@
 // ---------------------------------------------------------------------------
 //
 // Layout (RPN labels in parens where they differ):
-//   C(DROP)  [---------- display ----------]
+//   C  [---------- display ----------]
 //   7    8    9    ÷
 //   4    5    6    ×
 //   1    2    3    −
 //   0    .    =(ENTER)    +
 //
-// C/DROP: fires CLEAR (standard) or DROP (RPN).
-// Physical buttons: UP = SWAP (RPN only).
+// C: clears in standard mode; in RPN mode acts as backspace while typing or
+// clear-X (CLx) when no entry is in progress.
+// Physical buttons: UP = SWAP (RPN only), DOWN = backspace, SELECT = ±.
 static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
     // Grid row 1: 7, 8, 9, ÷
     {
@@ -155,8 +156,7 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
         .icon = CALC_ICON_PLUS,
     },
 
-    // C/DROP button (index 16) — placed in grid cell (0, 0) by
-    // calc_buttons_init.
+    // C button (index 16) — placed in grid cell (0, 0) by calc_buttons_init.
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "",
