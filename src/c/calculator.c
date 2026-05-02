@@ -15,38 +15,15 @@
 // Static state
 // ---------------------------------------------------------------------------
 
-#define CL_LONG_PRESS_MS 500
-
 static Window *s_window;
 static Layer *s_ui_layer;
 static CalcEngine s_engine;
 static int s_pressed_button = -1;
 static bool s_haptic_feedback = true;
-static AppTimer *s_cl_longpress_timer = NULL;
-static bool s_cl_longpress_fired = false;
 
 // ---------------------------------------------------------------------------
 // Touch handling
 // ---------------------------------------------------------------------------
-
-static void prv_cancel_longpress_timer(void) {
-  if (s_cl_longpress_timer) {
-    app_timer_cancel(s_cl_longpress_timer);
-    s_cl_longpress_timer = NULL;
-  }
-}
-
-static void prv_cl_longpress_cb(void *context) {
-  s_cl_longpress_timer = NULL;
-  s_cl_longpress_fired = true;
-  CalcAction action =
-      s_engine.rpn_mode ? CALC_ACTION_DROP : CALC_ACTION_CLEAR;
-  calc_engine_handle_action(&s_engine, action);
-  if (s_haptic_feedback) {
-    vibes_long_pulse();
-  }
-  calc_ui_mark_dirty();
-}
 
 static void prv_touch_handler(const TouchEvent *event, void *context) {
   switch (event->type) {
@@ -58,11 +35,6 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
         if (s_haptic_feedback) {
           vibes_short_pulse();
         }
-        if (idx == CALC_BUTTON_INDEX_CL) {
-          s_cl_longpress_fired = false;
-          s_cl_longpress_timer =
-              app_timer_register(CL_LONG_PRESS_MS, prv_cl_longpress_cb, NULL);
-        }
         calc_ui_mark_dirty();
       }
       break;
@@ -73,8 +45,6 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
         const CalcButton *btn = calc_buttons_get(s_pressed_button);
         GPoint p = GPoint(event->x, event->y);
         if (btn && !grect_contains_point(&btn->bounds, &p)) {
-          // Finger moved off the button — cancel
-          prv_cancel_longpress_timer();
           s_pressed_button = -1;
           calc_ui_set_pressed(-1);
           calc_ui_mark_dirty();
@@ -86,12 +56,10 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
     case TouchEvent_Liftoff: {
       if (s_pressed_button >= 0) {
         const CalcButton *btn = calc_buttons_get(s_pressed_button);
-        prv_cancel_longpress_timer();
-        if (btn && !s_cl_longpress_fired) {
+        if (btn) {
           CalcAction action = calc_button_get_action(btn, s_engine.rpn_mode);
           calc_engine_handle_action(&s_engine, action);
         }
-        s_cl_longpress_fired = false;
         s_pressed_button = -1;
         calc_ui_set_pressed(-1);
         calc_ui_mark_dirty();

@@ -25,6 +25,9 @@
 #define COLOR_FUNC_BG GColorMelon
 #define COLOR_FUNC_TEXT GColorBlack
 
+#define COLOR_CLEAR_BG GColorMelon
+#define COLOR_CLEAR_TEXT GColorDarkCandyAppleRed
+
 #define COLOR_ENT_BG GColorBlue
 #define COLOR_ENT_TEXT GColorWhite
 
@@ -67,6 +70,10 @@ static void prv_get_button_colors(const CalcButton *btn, bool pressed,
     *bg = COLOR_ENT_BG;
     *text = COLOR_ENT_TEXT;
     break;
+  case BUTTON_STYLE_CLEAR:
+    *bg = COLOR_CLEAR_BG;
+    *text = COLOR_CLEAR_TEXT;
+    break;
   }
 }
 
@@ -74,11 +81,12 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
   if (!s_engine)
     return;
 
-  // White display bg spans the full row 0 width; DEL is drawn over it in cell
-  // (0, 0). Text occupies cols 1-3 only, right-aligned within that area.
+  // White display bg spans the full row 0 width plus the 3px top gap; DEL is
+  // drawn over it in cell (0, 0). Text occupies cols 1-3 only, right-aligned.
   graphics_context_set_fill_color(ctx, COLOR_DISPLAY_BG);
-  graphics_fill_rect(ctx, GRect(0, 0, bounds.size.w, CALC_DISPLAY_HEIGHT), 0,
-                     GCornerNone);
+  graphics_fill_rect(
+      ctx, GRect(0, 0, bounds.size.w, CALC_DISPLAY_HEIGHT + CALC_GRID_OFFSET_Y),
+      0, GCornerNone);
 
   const CalcFonts *fonts = calc_fonts_get();
 
@@ -94,16 +102,18 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
   }
   graphics_context_set_text_color(ctx, COLOR_DISPLAY_SEC);
   // Negative y trims GOTHIC's top padding so the line sits flush at the top.
-  graphics_draw_text(
-      ctx, sec_buf, fonts->indicator, GRect(text_left, -4, text_w, 18),
-      GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
+  graphics_draw_text(ctx, sec_buf, fonts->indicator,
+                     GRect(text_left, -4 + CALC_GRID_OFFSET_Y, text_w, 18),
+                     GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
+                     NULL);
 
   // Primary line: X register, large.
   const char *x_str = calc_engine_get_x_display(s_engine);
   graphics_context_set_text_color(ctx, COLOR_DISPLAY_TEXT);
-  graphics_draw_text(
-      ctx, x_str, fonts->x_register, GRect(text_left, 8, text_w, 32),
-      GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
+  graphics_draw_text(ctx, x_str, fonts->x_register,
+                     GRect(text_left, 8 + CALC_GRID_OFFSET_Y, text_w, 32),
+                     GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
+                     NULL);
 }
 
 static void prv_draw_buttons(GContext *ctx, GRect bounds) {
@@ -139,7 +149,7 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
     if (btn->style == BUTTON_STYLE_NUMBER) {
       font = fonts->button_num;
       text_h = 32;
-      y_offset = -6;
+      y_offset = -5;
     } else if (strlen(label) > 2) {
       font = fonts->button_label_small;
       text_h = 18;

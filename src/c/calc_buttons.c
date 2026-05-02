@@ -5,13 +5,13 @@
 // ---------------------------------------------------------------------------
 //
 // Layout (RPN labels in parens where they differ):
-//   DEL  [---------- display ----------]
+//   C(DROP)  [---------- display ----------]
 //   7    8    9    ÷
 //   4    5    6    ×
 //   1    2    3    −
 //   0    .    =(ENTER)    +
 //
-// DEL: short-press = backspace, long-press = CLEAR (or DROP in RPN).
+// C/DROP: fires CLEAR (standard) or DROP (RPN).
 // Physical buttons: SELECT = =/ENTER, UP = ±/SWAP, DOWN = CLEAR.
 static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
     // Grid row 1: 7, 8, 9, ÷
@@ -75,7 +75,7 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
     },
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
-        .label = "\xC3\x97", // × in UTF-8
+        .label = "x",
         .rpn_label = NULL,
         .action = CALC_ACTION_MULTIPLY,
         .rpn_action = CALC_ACTION_MULTIPLY,
@@ -150,25 +150,25 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
         .style = BUTTON_STYLE_OPERATOR,
     },
 
-    // DEL button (index 16) — placed in grid cell (0, 0) by calc_buttons_init.
-    // Liftoff fires backspace; long-press is detected in calculator.c.
+    // C/DROP button (index 16) — placed in grid cell (0, 0) by
+    // calc_buttons_init.
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
-        .label = "DEL",
-        .rpn_label = NULL,
-        .action = CALC_ACTION_BACKSPACE,
-        .rpn_action = CALC_ACTION_BACKSPACE,
-        .style = BUTTON_STYLE_FUNCTION,
+        .label = "AC",
+        .rpn_label = "DROP",
+        .action = CALC_ACTION_CLEAR,
+        .rpn_action = CALC_ACTION_DROP,
+        .style = BUTTON_STYLE_CLEAR,
     },
 };
 
 // Maps grid (row, col) -> button index. -1 = display cell (no hit).
 static const int s_grid_cell_to_button[CALC_GRID_ROWS][CALC_GRID_COLS] = {
-    { CALC_BUTTON_INDEX_CL, -1, -1, -1 },  // DEL, display, display, display
-    { 0, 1, 2, 3 },                        // 7 8 9 ÷
-    { 4, 5, 6, 7 },                        // 4 5 6 ×
-    { 8, 9, 10, 11 },                      // 1 2 3 −
-    { 12, 13, 14, 15 },                    // 0 . = +
+    {CALC_BUTTON_INDEX_CL, -1, -1, -1}, // C/DROP, display, display, display
+    {0, 1, 2, 3},                       // 7 8 9 ÷
+    {4, 5, 6, 7},                       // 4 5 6 ×
+    {8, 9, 10, 11},                     // 1 2 3 −
+    {12, 13, 14, 15},                   // 0 . = +
 };
 
 // ---------------------------------------------------------------------------
@@ -179,9 +179,11 @@ void calc_buttons_init(void) {
   for (int row = 0; row < CALC_GRID_ROWS; row++) {
     for (int col = 0; col < CALC_GRID_COLS; col++) {
       int idx = s_grid_cell_to_button[row][col];
-      if (idx < 0) continue;  // display cell
+      if (idx < 0)
+        continue; // display cell
       s_buttons[idx].bounds =
-          GRect(col * CALC_CELL_W, row * CALC_CELL_H, CALC_CELL_W, CALC_CELL_H);
+          GRect(col * CALC_CELL_W, row * CALC_CELL_H + CALC_GRID_OFFSET_Y,
+                CALC_CELL_W, CALC_CELL_H);
     }
   }
 }
@@ -199,11 +201,15 @@ const CalcButton *calc_buttons_get(int index) {
 int calc_buttons_get_count(void) { return CALC_BUTTON_COUNT; }
 
 int calc_buttons_hit_test(GPoint point) {
-  if (point.x < 0 || point.y < 0) return -1;
+  if (point.x < 0 || point.y < CALC_GRID_OFFSET_Y)
+    return -1;
+  int adj_y = point.y - CALC_GRID_OFFSET_Y;
   int col = point.x / CALC_CELL_W;
-  int row = point.y / CALC_CELL_H;
-  if (col >= CALC_GRID_COLS) col = CALC_GRID_COLS - 1;  // right-edge clamp
-  if (row >= CALC_GRID_ROWS) row = CALC_GRID_ROWS - 1;  // absorb 3px slack
+  int row = adj_y / CALC_CELL_H;
+  if (col >= CALC_GRID_COLS)
+    col = CALC_GRID_COLS - 1;
+  if (row >= CALC_GRID_ROWS)
+    row = CALC_GRID_ROWS - 1;
   return s_grid_cell_to_button[row][col];
 }
 
