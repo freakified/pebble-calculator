@@ -1,51 +1,20 @@
 #include "calc_buttons.h"
 
 // ---------------------------------------------------------------------------
-// Layout constants for Emery (200 x 228)
-// ---------------------------------------------------------------------------
-
-// Display area occupies the top portion
-#define DISPLAY_HEIGHT 44
-
-// Button area starts below the display
-#define BUTTON_AREA_Y DISPLAY_HEIGHT
-#define BUTTON_AREA_H (228 - DISPLAY_HEIGHT) // 184 px
-
-// Grid: 4 rows x 4 columns
-#define GRID_ROWS 4
-#define GRID_COLS 4
-
-#define CELL_W (200 / GRID_COLS)           // 50 px
-#define CELL_H (BUTTON_AREA_H / GRID_ROWS) // 46 px
-
-// CL/backspace button intrudes into the top-left of the display.
-// Display text is right-aligned and shrinks to make room (see calc_ui.c).
-// Bounds match grid cells so the visual gap matches the rest of the grid.
-// The bottom 2px overlap with row-0 buttons; first-match hit testing gives
-// those rows priority, so CL's effective tap area stays inside the display.
-#define CL_BUTTON_W CELL_W
-#define CL_BUTTON_H CELL_H
-
-// Helper to create a button rect from grid position
-#define CELL_RECT(row, col, colspan)                                           \
-  GRect((col) * CELL_W, BUTTON_AREA_Y + (row) * CELL_H, (colspan) * CELL_W,    \
-        CELL_H)
-
-// ---------------------------------------------------------------------------
 // Static button definitions
 // ---------------------------------------------------------------------------
 //
 // Layout (RPN labels in parens where they differ):
-//   [DEL]                       (CL button overlays top-left of display)
-//   7  8  9  ÷
-//   4  5  6  ×
-//   1  2  3  −
-//   0  .  =(ENTER)  +
+//   DEL  [---------- display ----------]
+//   7    8    9    ÷
+//   4    5    6    ×
+//   1    2    3    −
+//   0    .    =(ENTER)    +
 //
-// CL button: short-press = backspace, long-press = CLEAR (or DROP in RPN).
+// DEL: short-press = backspace, long-press = CLEAR (or DROP in RPN).
 // Physical buttons: SELECT = =/ENTER, UP = ±/SWAP, DOWN = CLEAR.
 static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
-    // Row 0: 7, 8, 9, ÷
+    // Grid row 1: 7, 8, 9, ÷
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "7",
@@ -79,7 +48,7 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
         .style = BUTTON_STYLE_OPERATOR,
     },
 
-    // Row 1: 4, 5, 6, ×
+    // Grid row 2: 4, 5, 6, ×
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "4",
@@ -113,7 +82,7 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
         .style = BUTTON_STYLE_OPERATOR,
     },
 
-    // Row 2: 1, 2, 3, −
+    // Grid row 3: 1, 2, 3, −
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "1",
@@ -147,7 +116,7 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
         .style = BUTTON_STYLE_OPERATOR,
     },
 
-    // Row 3: 0, ., =(ENTER), +
+    // Grid row 4: 0, ., =(ENTER), +
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "0",
@@ -181,7 +150,7 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
         .style = BUTTON_STYLE_OPERATOR,
     },
 
-    // CL button (index 16) — bounds set explicitly in calc_buttons_init.
+    // DEL button (index 16) — placed in grid cell (0, 0) by calc_buttons_init.
     // Liftoff fires backspace; long-press is detected in calculator.c.
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
@@ -193,20 +162,28 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
     },
 };
 
+// Maps grid (row, col) -> button index. -1 = display cell (no hit).
+static const int s_grid_cell_to_button[CALC_GRID_ROWS][CALC_GRID_COLS] = {
+    { CALC_BUTTON_INDEX_CL, -1, -1, -1 },  // DEL, display, display, display
+    { 0, 1, 2, 3 },                        // 7 8 9 ÷
+    { 4, 5, 6, 7 },                        // 4 5 6 ×
+    { 8, 9, 10, 11 },                      // 1 2 3 −
+    { 12, 13, 14, 15 },                    // 0 . = +
+};
+
 // ---------------------------------------------------------------------------
 // Initialization — compute button rects
 // ---------------------------------------------------------------------------
 
 void calc_buttons_init(void) {
-  int idx = 0;
-  for (int row = 0; row < GRID_ROWS; row++) {
-    for (int col = 0; col < GRID_COLS; col++) {
-      s_buttons[idx].bounds = CELL_RECT(row, col, 1);
-      idx++;
+  for (int row = 0; row < CALC_GRID_ROWS; row++) {
+    for (int col = 0; col < CALC_GRID_COLS; col++) {
+      int idx = s_grid_cell_to_button[row][col];
+      if (idx < 0) continue;  // display cell
+      s_buttons[idx].bounds =
+          GRect(col * CALC_CELL_W, row * CALC_CELL_H, CALC_CELL_W, CALC_CELL_H);
     }
   }
-  s_buttons[CALC_BUTTON_INDEX_CL].bounds =
-      GRect(0, 0, CL_BUTTON_W, CL_BUTTON_H);
 }
 
 // ---------------------------------------------------------------------------
@@ -222,12 +199,12 @@ const CalcButton *calc_buttons_get(int index) {
 int calc_buttons_get_count(void) { return CALC_BUTTON_COUNT; }
 
 int calc_buttons_hit_test(GPoint point) {
-  for (int i = 0; i < CALC_BUTTON_COUNT; i++) {
-    if (grect_contains_point(&s_buttons[i].bounds, &point)) {
-      return i;
-    }
-  }
-  return -1;
+  if (point.x < 0 || point.y < 0) return -1;
+  int col = point.x / CALC_CELL_W;
+  int row = point.y / CALC_CELL_H;
+  if (col >= CALC_GRID_COLS) col = CALC_GRID_COLS - 1;  // right-edge clamp
+  if (row >= CALC_GRID_ROWS) row = CALC_GRID_ROWS - 1;  // absorb 3px slack
+  return s_grid_cell_to_button[row][col];
 }
 
 const char *calc_button_get_label(const CalcButton *btn, bool rpn_mode) {

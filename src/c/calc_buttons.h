@@ -21,10 +21,20 @@ typedef struct {
   CalcButtonStyle style;     // Visual style
 } CalcButton;
 
-// Number of buttons (16 grid + 1 CL/backspace in display area)
+// Layout grid (5 rows x 4 cols on Emery 200x228).
+// Row 0: [DEL][          display          ]
+// Rows 1-4: number/operator buttons. Bottom 3px of the screen are slack
+// and absorbed into row 4 by the hit test.
+#define CALC_GRID_ROWS 5
+#define CALC_GRID_COLS 4
+#define CALC_CELL_W 50              // 200 / 4
+#define CALC_CELL_H 45              // 5*45 = 225; bottom 3px clamp to row 4
+#define CALC_DISPLAY_HEIGHT CALC_CELL_H
+
+// Number of buttons (16 number/operator buttons + 1 DEL).
 #define CALC_BUTTON_COUNT 17
 
-// Index of the CL/backspace button (sits in the display area, not the grid).
+// Index of the DEL/backspace button (lives in grid cell (0, 0)).
 // Short-press = backspace; long-press handled in calculator.c = CLEAR/DROP.
 #define CALC_BUTTON_INDEX_CL 16
 

@@ -4,10 +4,9 @@
 #include <stdio.h>
 
 // ---------------------------------------------------------------------------
-// Layout constants
+// Layout constants (grid dimensions live in calc_buttons.h)
 // ---------------------------------------------------------------------------
 
-#define DISPLAY_HEIGHT 44
 #define DISPLAY_PAD_X 6
 #define DISPLAY_PAD_Y 2
 
@@ -75,17 +74,18 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
   if (!s_engine)
     return;
 
-  // Background
+  // Display occupies row 0, cols 1-3. (Cell (0,0) is the DEL button.)
+  const int disp_x = CALC_CELL_W;
+  const int disp_w = bounds.size.w - CALC_CELL_W;
+
   graphics_context_set_fill_color(ctx, COLOR_DISPLAY_BG);
-  graphics_fill_rect(ctx, GRect(0, 0, bounds.size.w, DISPLAY_HEIGHT), 0,
+  graphics_fill_rect(ctx, GRect(disp_x, 0, disp_w, CALC_DISPLAY_HEIGHT), 0,
                      GCornerNone);
 
   const CalcFonts *fonts = calc_fonts_get();
 
-  // The CL button overlays the display's top-left; right-aligned text shrinks.
-  const CalcButton *cl_btn = calc_buttons_get(CALC_BUTTON_INDEX_CL);
-  const int text_left = (cl_btn ? cl_btn->bounds.size.w : 0) + DISPLAY_PAD_X;
-  const int text_w = bounds.size.w - text_left - DISPLAY_PAD_X;
+  const int text_left = disp_x + DISPLAY_PAD_X;
+  const int text_w = disp_w - 2 * DISPLAY_PAD_X;
 
   // Secondary line: Y register (RPN) or pending operand + operator (standard).
   char sec_buf[CALC_DISPLAY_MAX + 4];
