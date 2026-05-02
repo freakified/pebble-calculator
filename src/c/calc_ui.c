@@ -1,5 +1,6 @@
 #include "calc_ui.h"
 #include "calc_buttons.h"
+#include "calc_fonts.h"
 #include <stdio.h>
 
 // ---------------------------------------------------------------------------
@@ -84,45 +85,43 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
 
   if (rpn) {
     // RPN mode: show Y register (secondary) + X register (primary)
-    GFont small_font = fonts_get_system_font(FONT_KEY_GOTHIC_18);
-    GFont large_font = fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
+    const CalcFonts *fonts = calc_fonts_get();
 
     char buf[CALC_DISPLAY_MAX + 4];
 
     // Y register
     calc_engine_get_stack_display(s_engine, 2, buf, sizeof(buf));
     graphics_context_set_text_color(ctx, COLOR_DISPLAY_SEC);
-    graphics_draw_text(ctx, buf, small_font,
+    graphics_draw_text(ctx, buf, fonts->small,
                        GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y,
                              bounds.size.w - DISPLAY_PAD_X * 2, 20),
-                       GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
+                        GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
                        NULL);
     graphics_draw_text(
-        ctx, "Y:", small_font, GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y, 22, 20),
+        ctx, "Y:", fonts->small, GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y, 22, 20),
         GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 
     // X register (primary)
     const char *x_str = calc_engine_get_x_display(s_engine);
     graphics_context_set_text_color(ctx, COLOR_DISPLAY_TEXT);
-    graphics_draw_text(ctx, x_str, large_font,
+    graphics_draw_text(ctx, x_str, fonts->large,
                        GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y + 18,
                              bounds.size.w - DISPLAY_PAD_X * 2, 32),
-                       GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
+                        GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
                        NULL);
     graphics_context_set_text_color(ctx, COLOR_DISPLAY_SEC);
     graphics_draw_text(
-        ctx, "X:", small_font, GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y + 24, 22, 20),
+        ctx, "X:", fonts->small, GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y + 24, 22, 20),
         GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
   } else {
     // Standard mode: secondary line + primary line
-    GFont large_font = fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
-    GFont small_font = fonts_get_system_font(FONT_KEY_GOTHIC_18);
+    const CalcFonts *fonts = calc_fonts_get();
 
     // Secondary (pending operand + operator)
     char sec_buf[32];
     calc_engine_get_secondary_display(s_engine, sec_buf, sizeof(sec_buf));
     graphics_context_set_text_color(ctx, COLOR_DISPLAY_SEC);
-    graphics_draw_text(ctx, sec_buf, small_font,
+    graphics_draw_text(ctx, sec_buf, fonts->small,
                        GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y,
                              bounds.size.w - DISPLAY_PAD_X * 2, 20),
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
@@ -131,7 +130,7 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
     // Primary (current entry / result)
     const char *x_str = calc_engine_get_x_display(s_engine);
     graphics_context_set_text_color(ctx, COLOR_DISPLAY_TEXT);
-    graphics_draw_text(ctx, x_str, large_font,
+    graphics_draw_text(ctx, x_str, fonts->large,
                        GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y + 18,
                              bounds.size.w - DISPLAY_PAD_X * 2, 32),
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
@@ -148,8 +147,7 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
   int count = calc_buttons_get_count();
   bool rpn = s_engine ? s_engine->rpn_mode : false;
 
-  GFont label_font = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
-  GFont small_label_font = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
+  const CalcFonts *fonts = calc_fonts_get();
 
   for (int i = 0; i < count; i++) {
     const CalcButton *btn = calc_buttons_get(i);
@@ -172,10 +170,10 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
     graphics_context_set_text_color(ctx, text);
 
     // Use smaller font for multi-char labels like "DROP", "SWAP", "ENT"
-    GFont font = (strlen(label) > 2) ? small_label_font : label_font;
+    GFont font = (strlen(label) > 2) ? fonts->label_small : fonts->label;
 
     // Center text in button
-    int text_h = (font == small_label_font) ? 20 : 26;
+    int text_h = (font == fonts->label_small) ? 20 : 26;
     int text_y = btn_rect.origin.y + (btn_rect.size.h - text_h) / 2 - 2;
     graphics_draw_text(
         ctx, label, font,

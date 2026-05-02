@@ -2,6 +2,7 @@
 #include "calc_engine.h"
 #include "calc_buttons.h"
 #include "calc_ui.h"
+#include "calc_fonts.h"
 
 // ---------------------------------------------------------------------------
 // Persistent storage keys
@@ -137,6 +138,9 @@ static void prv_window_load(Window *window) {
 
   // Initialize button layout
   calc_buttons_init();
+
+  // Initialize fonts
+  calc_fonts_init();
 
   // Initialize calculator engine
   calc_engine_init(&s_engine);
