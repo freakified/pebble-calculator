@@ -1,5 +1,3 @@
-Pebble.addEventListener("ready",
-    function(e) {
-        console.log("Hello world! - Sent from your javascript application.");
-    }
-);
+var Clay = require('@rebble/clay');
+var clayConfig = require('./config');
+var clay = new Clay(clayConfig);
