@@ -22,8 +22,8 @@
 #define COLOR_OP_BG GColorOrange
 #define COLOR_OP_TEXT GColorWhite
 
-#define COLOR_FUNC_BG GColorCobaltBlue
-#define COLOR_FUNC_TEXT GColorWhite
+#define COLOR_FUNC_BG GColorMelon
+#define COLOR_FUNC_TEXT GColorBlack
 
 #define COLOR_ENT_BG GColorBlue
 #define COLOR_ENT_TEXT GColorWhite
@@ -74,18 +74,16 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
   if (!s_engine)
     return;
 
-  // Display occupies row 0, cols 1-3. (Cell (0,0) is the DEL button.)
-  const int disp_x = CALC_CELL_W;
-  const int disp_w = bounds.size.w - CALC_CELL_W;
-
+  // White display bg spans the full row 0 width; DEL is drawn over it in cell
+  // (0, 0). Text occupies cols 1-3 only, right-aligned within that area.
   graphics_context_set_fill_color(ctx, COLOR_DISPLAY_BG);
-  graphics_fill_rect(ctx, GRect(disp_x, 0, disp_w, CALC_DISPLAY_HEIGHT), 0,
+  graphics_fill_rect(ctx, GRect(0, 0, bounds.size.w, CALC_DISPLAY_HEIGHT), 0,
                      GCornerNone);
 
   const CalcFonts *fonts = calc_fonts_get();
 
-  const int text_left = disp_x + DISPLAY_PAD_X;
-  const int text_w = disp_w - 2 * DISPLAY_PAD_X;
+  const int text_left = CALC_CELL_W + DISPLAY_PAD_X;
+  const int text_w = bounds.size.w - text_left - DISPLAY_PAD_X;
 
   // Secondary line: Y register (RPN) or pending operand + operator (standard).
   char sec_buf[CALC_DISPLAY_MAX + 4];
