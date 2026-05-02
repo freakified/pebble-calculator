@@ -393,6 +393,39 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
     return;
   }
 
+  if (action == CALC_ACTION_BACKSPACE) {
+    if (engine->error) {
+      bool rpn = engine->rpn_mode;
+      calc_engine_init(engine);
+      engine->rpn_mode = rpn;
+      return;
+    }
+    // Backspace only edits an in-progress entry; results are untouched
+    // (long-press CLEAR/DROP handles the result case).
+    if (!engine->entering) return;
+
+    if (engine->entry_len <= 1) {
+      prv_clear_entry(engine);
+      if (engine->rpn_mode) engine->stack[3] = 0.0;
+      return;
+    }
+    if (engine->entry[engine->entry_len - 1] == '.') {
+      engine->has_dot = false;
+    }
+    engine->entry_len--;
+    engine->entry[engine->entry_len] = '\0';
+    // Don't leave just "-" sitting in the buffer.
+    if (engine->entry_len == 1 && engine->entry[0] == '-') {
+      prv_clear_entry(engine);
+      if (engine->rpn_mode) engine->stack[3] = 0.0;
+      return;
+    }
+    if (engine->rpn_mode) {
+      engine->stack[3] = prv_entry_to_double(engine);
+    }
+    return;
+  }
+
   // Digits
   if (action <= CALC_ACTION_DIGIT_9) {
     prv_handle_digit(engine, (int)action - (int)CALC_ACTION_DIGIT_0);

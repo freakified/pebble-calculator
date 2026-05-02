@@ -18,6 +18,14 @@
 #define CELL_W (200 / GRID_COLS)           // 50 px
 #define CELL_H (BUTTON_AREA_H / GRID_ROWS) // 46 px
 
+// CL/backspace button intrudes into the top-left of the display.
+// Display text is right-aligned and shrinks to make room (see calc_ui.c).
+// Bounds match grid cells so the visual gap matches the rest of the grid.
+// The bottom 2px overlap with row-0 buttons; first-match hit testing gives
+// those rows priority, so CL's effective tap area stays inside the display.
+#define CL_BUTTON_W CELL_W
+#define CL_BUTTON_H CELL_H
+
 // Helper to create a button rect from grid position
 #define CELL_RECT(row, col, colspan)                                           \
   GRect((col) * CELL_W, BUTTON_AREA_Y + (row) * CELL_H, (colspan) * CELL_W,    \
@@ -28,12 +36,14 @@
 // ---------------------------------------------------------------------------
 //
 // Layout (RPN labels in parens where they differ):
+//   [DEL]                       (CL button overlays top-left of display)
 //   7  8  9  ÷
 //   4  5  6  ×
 //   1  2  3  −
 //   0  .  =(ENTER)  +
 //
-// CLEAR/DROP and SWAP/± are accessed via the physical UP/DOWN buttons.
+// CL button: short-press = backspace, long-press = CLEAR (or DROP in RPN).
+// Physical buttons: SELECT = =/ENTER, UP = ±/SWAP, DOWN = CLEAR.
 static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
     // Row 0: 7, 8, 9, ÷
     {
@@ -170,6 +180,17 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
         .rpn_action = CALC_ACTION_ADD,
         .style = BUTTON_STYLE_OPERATOR,
     },
+
+    // CL button (index 16) — bounds set explicitly in calc_buttons_init.
+    // Liftoff fires backspace; long-press is detected in calculator.c.
+    {
+        .bounds = {.origin = {0, 0}, .size = {0, 0}},
+        .label = "DEL",
+        .rpn_label = NULL,
+        .action = CALC_ACTION_BACKSPACE,
+        .rpn_action = CALC_ACTION_BACKSPACE,
+        .style = BUTTON_STYLE_FUNCTION,
+    },
 };
 
 // ---------------------------------------------------------------------------
@@ -184,6 +205,8 @@ void calc_buttons_init(void) {
       idx++;
     }
   }
+  s_buttons[CALC_BUTTON_INDEX_CL].bounds =
+      GRect(0, 0, CL_BUTTON_W, CL_BUTTON_H);
 }
 
 // ---------------------------------------------------------------------------

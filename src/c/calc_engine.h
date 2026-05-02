@@ -26,6 +26,7 @@ typedef enum {
   CALC_ACTION_NEGATE,
   CALC_ACTION_EQUALS,    // Standard mode: evaluate
   CALC_ACTION_CLEAR,     // C
+  CALC_ACTION_BACKSPACE, // Remove last char from current entry
   // RPN-specific
   CALC_ACTION_ENTER,     // Push X onto stack
   CALC_ACTION_SWAP,      // Swap X <-> Y

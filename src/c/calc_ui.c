@@ -16,7 +16,6 @@
 #define COLOR_DISPLAY_BG GColorWhite
 #define COLOR_DISPLAY_TEXT GColorBlack
 #define COLOR_DISPLAY_SEC GColorDarkGray
-#define COLOR_SEPARATOR GColorLightGray
 
 #define COLOR_NUM_BG GColorDarkGray
 #define COLOR_NUM_TEXT GColorWhite
@@ -82,7 +81,11 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
                      GCornerNone);
 
   const CalcFonts *fonts = calc_fonts_get();
-  const int text_w = bounds.size.w - DISPLAY_PAD_X * 2;
+
+  // The CL button overlays the display's top-left; right-aligned text shrinks.
+  const CalcButton *cl_btn = calc_buttons_get(CALC_BUTTON_INDEX_CL);
+  const int text_left = (cl_btn ? cl_btn->bounds.size.w : 0) + DISPLAY_PAD_X;
+  const int text_w = bounds.size.w - text_left - DISPLAY_PAD_X;
 
   // Secondary line: Y register (RPN) or pending operand + operator (standard).
   char sec_buf[CALC_DISPLAY_MAX + 4];
@@ -93,23 +96,16 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
   }
   graphics_context_set_text_color(ctx, COLOR_DISPLAY_SEC);
   // Negative y trims GOTHIC's top padding so the line sits flush at the top.
-  graphics_draw_text(ctx, sec_buf, fonts->indicator,
-                     GRect(DISPLAY_PAD_X, -4, text_w, 18),
-                     GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
-                     NULL);
+  graphics_draw_text(
+      ctx, sec_buf, fonts->indicator, GRect(text_left, -4, text_w, 18),
+      GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
 
   // Primary line: X register, large.
   const char *x_str = calc_engine_get_x_display(s_engine);
   graphics_context_set_text_color(ctx, COLOR_DISPLAY_TEXT);
-  graphics_draw_text(ctx, x_str, fonts->x_register,
-                     GRect(DISPLAY_PAD_X, 8, text_w, 32),
-                     GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
-                     NULL);
-
-  // Separator line
-  graphics_context_set_stroke_color(ctx, COLOR_SEPARATOR);
-  graphics_draw_line(ctx, GPoint(0, DISPLAY_HEIGHT - 1),
-                     GPoint(bounds.size.w, DISPLAY_HEIGHT - 1));
+  graphics_draw_text(
+      ctx, x_str, fonts->x_register, GRect(text_left, 8, text_w, 32),
+      GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
 }
 
 static void prv_draw_buttons(GContext *ctx, GRect bounds) {

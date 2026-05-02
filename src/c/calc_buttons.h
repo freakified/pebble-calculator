@@ -21,8 +21,12 @@ typedef struct {
   CalcButtonStyle style;     // Visual style
 } CalcButton;
 
-// Number of buttons
-#define CALC_BUTTON_COUNT 16
+// Number of buttons (16 grid + 1 CL/backspace in display area)
+#define CALC_BUTTON_COUNT 17
+
+// Index of the CL/backspace button (sits in the display area, not the grid).
+// Short-press = backspace; long-press handled in calculator.c = CLEAR/DROP.
+#define CALC_BUTTON_INDEX_CL 16
 
 // Initialize button layout (call once)
 void calc_buttons_init(void);
