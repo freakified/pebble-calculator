@@ -71,59 +71,31 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
   bool rpn = s_engine->rpn_mode;
 
   if (rpn) {
-    // RPN mode: show T, Z, Y stack registers (small) + X (large)
-    GFont small_font = fonts_get_system_font(FONT_KEY_GOTHIC_14);
-    GFont med_font   = fonts_get_system_font(FONT_KEY_GOTHIC_18);
-    GFont large_font = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
+    // RPN mode: show Y register (secondary) + X register (primary)
+    GFont small_font = fonts_get_system_font(FONT_KEY_GOTHIC_18);
+    GFont large_font = fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
 
     char buf[CALC_DISPLAY_MAX + 4];
-    int y = DISPLAY_PAD_Y;
-    int line_h_small = 14;
-    int line_h_large = 26;
-
-    // T register
-    calc_engine_get_stack_display(s_engine, 0, buf, sizeof(buf));
-    graphics_context_set_text_color(ctx, GColorDarkGray);
-    graphics_draw_text(ctx, buf, small_font,
-        GRect(DISPLAY_PAD_X, y, bounds.size.w - DISPLAY_PAD_X * 2, line_h_small),
-        GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
-
-    // T label
-    graphics_draw_text(ctx, "T:", small_font,
-        GRect(DISPLAY_PAD_X, y, 20, line_h_small),
-        GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-    y += line_h_small - 2;
-
-    // Z register
-    calc_engine_get_stack_display(s_engine, 1, buf, sizeof(buf));
-    graphics_draw_text(ctx, buf, small_font,
-        GRect(DISPLAY_PAD_X, y, bounds.size.w - DISPLAY_PAD_X * 2, line_h_small),
-        GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
-    graphics_draw_text(ctx, "Z:", small_font,
-        GRect(DISPLAY_PAD_X, y, 20, line_h_small),
-        GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-    y += line_h_small - 2;
 
     // Y register
     calc_engine_get_stack_display(s_engine, 2, buf, sizeof(buf));
     graphics_context_set_text_color(ctx, COLOR_DISPLAY_SEC);
-    graphics_draw_text(ctx, buf, med_font,
-        GRect(DISPLAY_PAD_X, y - 2, bounds.size.w - DISPLAY_PAD_X * 2, line_h_small + 4),
+    graphics_draw_text(ctx, buf, small_font,
+        GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y, bounds.size.w - DISPLAY_PAD_X * 2, 20),
         GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
-    graphics_draw_text(ctx, "Y:", med_font,
-        GRect(DISPLAY_PAD_X, y - 2, 22, line_h_small + 4),
+    graphics_draw_text(ctx, "Y:", small_font,
+        GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y, 22, 20),
         GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-    y += line_h_small + 1;
 
     // X register (primary)
     const char *x_str = calc_engine_get_x_display(s_engine);
     graphics_context_set_text_color(ctx, COLOR_DISPLAY_TEXT);
     graphics_draw_text(ctx, x_str, large_font,
-        GRect(DISPLAY_PAD_X, y - 4, bounds.size.w - DISPLAY_PAD_X * 2, line_h_large),
+        GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y + 18, bounds.size.w - DISPLAY_PAD_X * 2, 32),
         GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
     graphics_context_set_text_color(ctx, GColorDarkGray);
-    graphics_draw_text(ctx, "X:", med_font,
-        GRect(DISPLAY_PAD_X, y - 1, 22, line_h_small + 4),
+    graphics_draw_text(ctx, "X:", small_font,
+        GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y + 24, 22, 20),
         GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
   } else {
     // Standard mode: secondary line + primary line
