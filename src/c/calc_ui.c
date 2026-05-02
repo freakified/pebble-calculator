@@ -92,26 +92,26 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
     // Y register
     calc_engine_get_stack_display(s_engine, 2, buf, sizeof(buf));
     graphics_context_set_text_color(ctx, COLOR_DISPLAY_SEC);
-    graphics_draw_text(ctx, buf, fonts->small,
-                       GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y,
-                             bounds.size.w - DISPLAY_PAD_X * 2, 20),
+    graphics_draw_text(ctx, buf, fonts->y_register,
+                       GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y - 4,
+                             bounds.size.w - DISPLAY_PAD_X * 2, 28),
                         GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
                        NULL);
     graphics_draw_text(
-        ctx, "Y:", fonts->small, GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y, 22, 20),
+        ctx, "Y:", fonts->indicator, GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y + 2, 22, 20),
         GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 
     // X register (primary)
     const char *x_str = calc_engine_get_x_display(s_engine);
     graphics_context_set_text_color(ctx, COLOR_DISPLAY_TEXT);
-    graphics_draw_text(ctx, x_str, fonts->large,
+    graphics_draw_text(ctx, x_str, fonts->x_register,
                        GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y + 18,
                              bounds.size.w - DISPLAY_PAD_X * 2, 32),
                         GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
                        NULL);
     graphics_context_set_text_color(ctx, COLOR_DISPLAY_SEC);
     graphics_draw_text(
-        ctx, "X:", fonts->small, GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y + 24, 22, 20),
+        ctx, "X:", fonts->indicator, GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y + 24, 22, 20),
         GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
   } else {
     // Standard mode: secondary line + primary line
@@ -121,16 +121,16 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
     char sec_buf[32];
     calc_engine_get_secondary_display(s_engine, sec_buf, sizeof(sec_buf));
     graphics_context_set_text_color(ctx, COLOR_DISPLAY_SEC);
-    graphics_draw_text(ctx, sec_buf, fonts->small,
-                       GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y,
-                             bounds.size.w - DISPLAY_PAD_X * 2, 20),
+    graphics_draw_text(ctx, sec_buf, fonts->y_register,
+                       GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y - 4,
+                             bounds.size.w - DISPLAY_PAD_X * 2, 28),
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
                        NULL);
 
     // Primary (current entry / result)
     const char *x_str = calc_engine_get_x_display(s_engine);
     graphics_context_set_text_color(ctx, COLOR_DISPLAY_TEXT);
-    graphics_draw_text(ctx, x_str, fonts->large,
+    graphics_draw_text(ctx, x_str, fonts->x_register,
                        GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y + 18,
                              bounds.size.w - DISPLAY_PAD_X * 2, 32),
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
@@ -169,12 +169,26 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
     const char *label = calc_button_get_label(btn, rpn);
     graphics_context_set_text_color(ctx, text);
 
-    // Use smaller font for multi-char labels like "DROP", "SWAP", "ENT"
-    GFont font = (strlen(label) > 2) ? fonts->label_small : fonts->label;
+    GFont font;
+    int text_h;
+    int y_offset;
+
+    if (btn->style == BUTTON_STYLE_NUMBER) {
+      font = fonts->button_num;
+      text_h = 32;
+      y_offset = -6;
+    } else if (strlen(label) > 2) {
+      font = fonts->button_label_small;
+      text_h = 18;
+      y_offset = -2;
+    } else {
+      font = fonts->button_label;
+      text_h = 24;
+      y_offset = -4;
+    }
 
     // Center text in button
-    int text_h = (font == fonts->label_small) ? 20 : 26;
-    int text_y = btn_rect.origin.y + (btn_rect.size.h - text_h) / 2 - 2;
+    int text_y = btn_rect.origin.y + (btn_rect.size.h - text_h) / 2 + y_offset;
     graphics_draw_text(
         ctx, label, font,
         GRect(btn_rect.origin.x, text_y, btn_rect.size.w, text_h),

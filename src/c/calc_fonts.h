@@ -3,10 +3,12 @@
 #include <pebble.h>
 
 typedef struct {
-  GFont small;
-  GFont large;
-  GFont label;
-  GFont label_small;
+  GFont x_register;
+  GFont y_register;
+  GFont indicator;
+  GFont button_num;
+  GFont button_label;
+  GFont button_label_small;
 } CalcFonts;
 
 // Initialize fonts (should be called during app/window load)
