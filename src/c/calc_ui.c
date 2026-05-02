@@ -90,8 +90,8 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
 
   const CalcFonts *fonts = calc_fonts_get();
 
-  const int text_left = CALC_CELL_W + DISPLAY_PAD_X;
-  const int text_w = bounds.size.w - text_left - DISPLAY_PAD_X;
+  const int text_left = CALC_CELL_W;
+  const int text_w = bounds.size.w - text_left - DISPLAY_PAD_X + 6;
 
   // Secondary line: Y register (RPN) or pending operand + operator (standard).
   char sec_buf[CALC_DISPLAY_MAX + 4];
@@ -102,8 +102,9 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
   }
   graphics_context_set_text_color(ctx, COLOR_DISPLAY_SEC);
   // Negative y trims GOTHIC's top padding so the line sits flush at the top.
+
   graphics_draw_text(ctx, sec_buf, fonts->indicator,
-                     GRect(text_left + 4, -2 + CALC_GRID_OFFSET_Y, text_w, 18),
+                     GRect(text_left, CALC_GRID_OFFSET_Y - 2, text_w - 2, 18),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
                      NULL);
 
@@ -111,7 +112,7 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
   const char *x_str = calc_engine_get_x_display(s_engine);
   graphics_context_set_text_color(ctx, COLOR_DISPLAY_TEXT);
   graphics_draw_text(ctx, x_str, fonts->x_register,
-                     GRect(text_left + 6, 10 + CALC_GRID_OFFSET_Y, text_w, 32),
+                     GRect(text_left, 10 + CALC_GRID_OFFSET_Y, text_w, 32),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
                      NULL);
 }
