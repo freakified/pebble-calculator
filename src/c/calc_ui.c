@@ -152,7 +152,7 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
     GRect btn_rect = btn->bounds;
     // Inset slightly for grid gap effect
     GRect fill_rect = grect_inset(btn_rect, GEdgeInsets(2));
-    graphics_fill_rect(ctx, fill_rect, 5, GCornersAll);
+    graphics_fill_rect(ctx, fill_rect, 8, GCornersAll);
 
     // Icons take precedence over labels, except in RPN mode when an explicit
     // rpn_label is set (e.g. ENTER overrides the = icon).
