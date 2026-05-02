@@ -117,13 +117,14 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
     if (*p >= '0' && *p <= '9') digit_count++;
   }
   bool use_gothic = (digit_count > CALC_X_MAX_DIGITS_LECO) ||
-                    (strchr(x_str, 'e') != NULL);
+                    (strchr(x_str, 'e') != NULL) ||
+                    s_engine->error;
   GFont x_font = use_gothic
       ? fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD)
       : fonts->x_register;
-  graphics_context_set_text_color(ctx, COLOR_DISPLAY_TEXT);
+  graphics_context_set_text_color(ctx, s_engine->error ? GColorDarkCandyAppleRed : COLOR_DISPLAY_TEXT);
   graphics_draw_text(ctx, x_str, x_font,
-                     GRect(text_left, 10 + CALC_GRID_OFFSET_Y, text_w, 32),
+                     GRect(text_left - (use_gothic ? 2 : 0), 10 + CALC_GRID_OFFSET_Y + (use_gothic ? 2 : 0), text_w, 32),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
                      NULL);
 }
