@@ -24,7 +24,7 @@
 #define COLOR_OP_BG GColorOrange
 #define COLOR_OP_TEXT GColorWhite
 
-#define COLOR_FUNC_BG GColorBlack
+#define COLOR_FUNC_BG GColorCobaltBlue
 #define COLOR_FUNC_TEXT GColorWhite
 
 #define COLOR_ENT_BG GColorIslamicGreen
@@ -95,11 +95,12 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
     graphics_draw_text(ctx, buf, fonts->y_register,
                        GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y - 4,
                              bounds.size.w - DISPLAY_PAD_X * 2, 28),
-                        GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
+                       GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
                        NULL);
-    graphics_draw_text(
-        ctx, "Y:", fonts->indicator, GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y + 2, 22, 20),
-        GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    graphics_draw_text(ctx, "Y:", fonts->indicator,
+                       GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y + 2, 22, 20),
+                       GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft,
+                       NULL);
 
     // X register (primary)
     const char *x_str = calc_engine_get_x_display(s_engine);
@@ -107,12 +108,13 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
     graphics_draw_text(ctx, x_str, fonts->x_register,
                        GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y + 18,
                              bounds.size.w - DISPLAY_PAD_X * 2, 32),
-                        GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
+                       GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
                        NULL);
     graphics_context_set_text_color(ctx, COLOR_DISPLAY_SEC);
-    graphics_draw_text(
-        ctx, "X:", fonts->indicator, GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y + 24, 22, 20),
-        GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    graphics_draw_text(ctx, "X:", fonts->indicator,
+                       GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y + 24, 22, 20),
+                       GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft,
+                       NULL);
   } else {
     // Standard mode: secondary line + primary line
     const CalcFonts *fonts = calc_fonts_get();
