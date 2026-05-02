@@ -8,6 +8,7 @@
 // ---------------------------------------------------------------------------
 
 #define PERSIST_KEY_RPN_MODE 1
+#define PERSIST_KEY_HAPTIC_FEEDBACK 2
 
 // ---------------------------------------------------------------------------
 // Static state
@@ -17,6 +18,7 @@ static Window *s_window;
 static Layer *s_ui_layer;
 static CalcEngine s_engine;
 static int s_pressed_button = -1;
+static bool s_haptic_feedback = true;
 
 // ---------------------------------------------------------------------------
 // Touch handling
@@ -29,7 +31,9 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
       if (idx >= 0) {
         s_pressed_button = idx;
         calc_ui_set_pressed(idx);
-        vibes_short_pulse();
+        if (s_haptic_feedback) {
+          vibes_short_pulse();
+        }
         calc_ui_mark_dirty();
       }
       break;
@@ -114,6 +118,13 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
     calc_ui_mark_dirty();
     APP_LOG(APP_LOG_LEVEL_INFO, "RPN mode set to %d", rpn);
   }
+
+  Tuple *haptic_tuple = dict_find(iter, MESSAGE_KEY_HAPTIC_FEEDBACK);
+  if (haptic_tuple) {
+    s_haptic_feedback = haptic_tuple->value->int32 != 0;
+    persist_write_bool(PERSIST_KEY_HAPTIC_FEEDBACK, s_haptic_feedback);
+    APP_LOG(APP_LOG_LEVEL_INFO, "Haptic feedback set to %d", s_haptic_feedback);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -134,6 +145,11 @@ static void prv_window_load(Window *window) {
   if (persist_exists(PERSIST_KEY_RPN_MODE)) {
     bool rpn = persist_read_bool(PERSIST_KEY_RPN_MODE);
     s_engine.rpn_mode = rpn;
+  }
+
+  // Restore haptic feedback setting
+  if (persist_exists(PERSIST_KEY_HAPTIC_FEEDBACK)) {
+    s_haptic_feedback = persist_read_bool(PERSIST_KEY_HAPTIC_FEEDBACK);
   }
 
   // Create UI

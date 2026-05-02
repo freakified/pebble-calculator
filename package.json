@@ -21,7 +21,8 @@
       "watchface": false
     },
     "messageKeys": [
-      "RPN_MODE"
+      "RPN_MODE",
+      "HAPTIC_FEEDBACK"
     ],
     "resources": {
       "media": []

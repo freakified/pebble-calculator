@@ -16,6 +16,13 @@ module.exports = [
         "label": "RPN Mode",
         "defaultValue": false,
         "description": "Enable Reverse Polish Notation (RPN) mode with a 4-register stack (T/Z/Y/X). When off, the calculator uses standard infix notation."
+      },
+      {
+        "type": "toggle",
+        "messageKey": "HAPTIC_FEEDBACK",
+        "label": "Haptic Feedback",
+        "defaultValue": true,
+        "description": "Provide a short vibration pulse when a button is pressed."
       }
     ]
   },
