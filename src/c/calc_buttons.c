@@ -41,11 +41,12 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
     },
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
-        .label = "\xC3\xB7", // ÷ in UTF-8
+        .label = "",
         .rpn_label = NULL,
         .action = CALC_ACTION_DIVIDE,
         .rpn_action = CALC_ACTION_DIVIDE,
         .style = BUTTON_STYLE_OPERATOR,
+        .icon = CALC_ICON_DIVIDE,
     },
 
     // Grid row 2: 4, 5, 6, ×
@@ -75,11 +76,12 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
     },
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
-        .label = "✖️",
+        .label = "",
         .rpn_label = NULL,
         .action = CALC_ACTION_MULTIPLY,
         .rpn_action = CALC_ACTION_MULTIPLY,
         .style = BUTTON_STYLE_OPERATOR,
+        .icon = CALC_ICON_MULTIPLY,
     },
 
     // Grid row 3: 1, 2, 3, −
@@ -109,11 +111,12 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
     },
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
-        .label = "-",
+        .label = "",
         .rpn_label = NULL,
         .action = CALC_ACTION_SUBTRACT,
         .rpn_action = CALC_ACTION_SUBTRACT,
         .style = BUTTON_STYLE_OPERATOR,
+        .icon = CALC_ICON_MINUS,
     },
 
     // Grid row 4: 0, ., =(ENTER), +
@@ -143,22 +146,24 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
     },
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
-        .label = "+",
+        .label = "",
         .rpn_label = NULL,
         .action = CALC_ACTION_ADD,
         .rpn_action = CALC_ACTION_ADD,
         .style = BUTTON_STYLE_OPERATOR,
+        .icon = CALC_ICON_PLUS,
     },
 
     // C/DROP button (index 16) — placed in grid cell (0, 0) by
     // calc_buttons_init.
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
-        .label = "C",
+        .label = "",
         .rpn_label = NULL,
         .action = CALC_ACTION_CLEAR,
         .rpn_action = CALC_ACTION_CLEAR,
         .style = BUTTON_STYLE_CLEAR,
+        .icon = CALC_ICON_BACKSPACE,
     },
 };
 

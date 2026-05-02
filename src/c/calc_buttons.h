@@ -2,6 +2,7 @@
 
 #include <pebble.h>
 #include "calc_engine.h"
+#include "calc_icons.h"
 
 // Button visual style
 typedef enum {
@@ -15,11 +16,12 @@ typedef enum {
 // A single button definition
 typedef struct {
   GRect bounds;              // Pixel rect on screen
-  const char *label;         // Label for standard mode
+  const char *label;         // Label for standard mode (ignored if icon != NONE)
   const char *rpn_label;     // Label for RPN mode (NULL = same as label)
   CalcAction action;         // What action this button triggers
   CalcAction rpn_action;     // Action in RPN mode (if different; use same action if equal)
   CalcButtonStyle style;     // Visual style
+  CalcIcon icon;             // If set, drawn instead of label
 } CalcButton;
 
 // Layout grid (5 rows x 4 cols on Emery 200x228).

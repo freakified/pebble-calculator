@@ -1,6 +1,7 @@
 #include "calc_ui.h"
 #include "calc_buttons.h"
 #include "calc_fonts.h"
+#include "calc_icons.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -110,23 +111,25 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
                      NULL);
 
   // Primary line: X register, large.
-  // Font tiers: ≤7 digits → LECO 32 Bold, 8+ digits or sci notation → GOTHIC 28 Bold.
+  // Font tiers: ≤7 digits → LECO 32 Bold, 8+ digits or sci notation → GOTHIC 28
+  // Bold.
   const char *x_str = calc_engine_get_x_display(s_engine);
   int digit_count = 0;
   for (const char *p = x_str; *p; p++) {
-    if (*p >= '0' && *p <= '9') digit_count++;
+    if (*p >= '0' && *p <= '9')
+      digit_count++;
   }
   bool use_gothic = (digit_count > CALC_X_MAX_DIGITS_LECO) ||
-                    (strchr(x_str, 'e') != NULL) ||
-                    s_engine->error;
-  GFont x_font = use_gothic
-      ? fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD)
-      : fonts->x_register;
-  graphics_context_set_text_color(ctx, s_engine->error ? GColorDarkCandyAppleRed : COLOR_DISPLAY_TEXT);
-  graphics_draw_text(ctx, x_str, x_font,
-                     GRect(text_left - (use_gothic ? 2 : 0), 10 + CALC_GRID_OFFSET_Y + (use_gothic ? 2 : 0), text_w, 32),
-                     GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
-                     NULL);
+                    (strchr(x_str, 'e') != NULL) || s_engine->error;
+  GFont x_font = use_gothic ? fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD)
+                            : fonts->x_register;
+  graphics_context_set_text_color(ctx, s_engine->error ? GColorDarkCandyAppleRed
+                                                       : COLOR_DISPLAY_TEXT);
+  graphics_draw_text(
+      ctx, x_str, x_font,
+      GRect(text_left - (use_gothic ? 2 : 0),
+            10 + CALC_GRID_OFFSET_Y + (use_gothic ? 2 : 0), text_w, 32),
+      GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
 }
 
 static void prv_draw_buttons(GContext *ctx, GRect bounds) {
@@ -151,6 +154,11 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
     GRect fill_rect = grect_inset(btn_rect, GEdgeInsets(2));
     graphics_fill_rect(ctx, fill_rect, 5, GCornersAll);
 
+    if (btn->icon != CALC_ICON_NONE) {
+      calc_icons_draw(ctx, btn->icon, fill_rect, text, bg);
+      continue;
+    }
+
     // Draw label
     const char *label = calc_button_get_label(btn, rpn);
     graphics_context_set_text_color(ctx, text);
@@ -170,7 +178,7 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
     } else {
       font = fonts->button_label;
       text_h = 24;
-      y_offset = -4;
+      y_offset = -6;
     }
 
     // Center text in button
