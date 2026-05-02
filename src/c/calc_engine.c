@@ -421,25 +421,6 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
     return;
   }
 
-  // Percent
-  if (action == CALC_ACTION_PERCENT) {
-    if (engine->error) return;
-    double val = prv_entry_to_double(engine);
-    if (engine->rpn_mode) {
-      double y = engine->stack[2];
-      val = y * val / 100.0;
-      engine->stack[3] = val;
-    } else {
-      if (engine->pending_op == CALC_OP_ADD || engine->pending_op == CALC_OP_SUBTRACT) {
-        val = engine->pending_value * val / 100.0;
-      } else {
-        val = val / 100.0;
-      }
-    }
-    prv_double_to_entry(engine, val);
-    return;
-  }
-
   // Operators
   if (action == CALC_ACTION_ADD || action == CALC_ACTION_SUBTRACT ||
       action == CALC_ACTION_MULTIPLY || action == CALC_ACTION_DIVIDE) {

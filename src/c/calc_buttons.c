@@ -5,18 +5,18 @@
 // ---------------------------------------------------------------------------
 
 // Display area occupies the top portion
-#define DISPLAY_HEIGHT 52
+#define DISPLAY_HEIGHT 44
 
 // Button area starts below the display
 #define BUTTON_AREA_Y DISPLAY_HEIGHT
-#define BUTTON_AREA_H (228 - DISPLAY_HEIGHT) // 176 px
+#define BUTTON_AREA_H (228 - DISPLAY_HEIGHT) // 184 px
 
-// Grid: 5 rows x 4 columns
-#define GRID_ROWS 5
+// Grid: 4 rows x 4 columns
+#define GRID_ROWS 4
 #define GRID_COLS 4
 
 #define CELL_W (200 / GRID_COLS)           // 50 px
-#define CELL_H (BUTTON_AREA_H / GRID_ROWS) // 35 px
+#define CELL_H (BUTTON_AREA_H / GRID_ROWS) // 46 px
 
 // Helper to create a button rect from grid position
 #define CELL_RECT(row, col, colspan)                                           \
@@ -26,44 +26,16 @@
 // ---------------------------------------------------------------------------
 // Static button definitions
 // ---------------------------------------------------------------------------
-
+//
+// Layout (RPN labels in parens where they differ):
+//   7  8  9  ÷
+//   4  5  6  ×
+//   1  2  3  −
+//   0  .  =(ENTER)  +
+//
+// CLEAR/DROP and SWAP/± are accessed via the physical UP/DOWN buttons.
 static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
-    // Row 0: C, ±, %, ÷
-    // In RPN: DROP, SWAP, %, ÷
-    {
-        .bounds = {.origin = {0, 0}, .size = {0, 0}}, // filled in init
-        .label = "C",
-        .rpn_label = "DROP",
-        .action = CALC_ACTION_CLEAR,
-        .rpn_action = CALC_ACTION_DROP,
-        .style = BUTTON_STYLE_FUNCTION,
-    },
-    {
-        .bounds = {.origin = {0, 0}, .size = {0, 0}},
-        .label = "\xC2\xB1", // ± in UTF-8
-        .rpn_label = "SWAP",
-        .action = CALC_ACTION_NEGATE,
-        .rpn_action = CALC_ACTION_SWAP,
-        .style = BUTTON_STYLE_FUNCTION,
-    },
-    {
-        .bounds = {.origin = {0, 0}, .size = {0, 0}},
-        .label = "%",
-        .rpn_label = NULL,
-        .action = CALC_ACTION_PERCENT,
-        .rpn_action = CALC_ACTION_PERCENT,
-        .style = BUTTON_STYLE_FUNCTION,
-    },
-    {
-        .bounds = {.origin = {0, 0}, .size = {0, 0}},
-        .label = "\xC3\xB7", // ÷ in UTF-8
-        .rpn_label = NULL,
-        .action = CALC_ACTION_DIVIDE,
-        .rpn_action = CALC_ACTION_DIVIDE,
-        .style = BUTTON_STYLE_OPERATOR,
-    },
-
-    // Row 1: 7, 8, 9, ×
+    // Row 0: 7, 8, 9, ÷
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "7",
@@ -90,14 +62,14 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
     },
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
-        .label = "\xC3\x97", // × in UTF-8
+        .label = "\xC3\xB7", // ÷ in UTF-8
         .rpn_label = NULL,
-        .action = CALC_ACTION_MULTIPLY,
-        .rpn_action = CALC_ACTION_MULTIPLY,
+        .action = CALC_ACTION_DIVIDE,
+        .rpn_action = CALC_ACTION_DIVIDE,
         .style = BUTTON_STYLE_OPERATOR,
     },
 
-    // Row 2: 4, 5, 6, −
+    // Row 1: 4, 5, 6, ×
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "4",
@@ -124,14 +96,14 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
     },
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
-        .label = "-", // minus
+        .label = "\xC3\x97", // × in UTF-8
         .rpn_label = NULL,
-        .action = CALC_ACTION_SUBTRACT,
-        .rpn_action = CALC_ACTION_SUBTRACT,
+        .action = CALC_ACTION_MULTIPLY,
+        .rpn_action = CALC_ACTION_MULTIPLY,
         .style = BUTTON_STYLE_OPERATOR,
     },
 
-    // Row 3: 1, 2, 3, +
+    // Row 2: 1, 2, 3, −
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "1",
@@ -158,14 +130,14 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
     },
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
-        .label = "+",
+        .label = "-",
         .rpn_label = NULL,
-        .action = CALC_ACTION_ADD,
-        .rpn_action = CALC_ACTION_ADD,
+        .action = CALC_ACTION_SUBTRACT,
+        .rpn_action = CALC_ACTION_SUBTRACT,
         .style = BUTTON_STYLE_OPERATOR,
     },
 
-    // Row 4: 0 (wide), ., =  (in RPN: 0 (wide), ., ENT)
+    // Row 3: 0, ., =(ENTER), +
     {
         .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "0",
@@ -190,6 +162,14 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
         .rpn_action = CALC_ACTION_ENTER,
         .style = BUTTON_STYLE_ENTER,
     },
+    {
+        .bounds = {.origin = {0, 0}, .size = {0, 0}},
+        .label = "+",
+        .rpn_label = NULL,
+        .action = CALC_ACTION_ADD,
+        .rpn_action = CALC_ACTION_ADD,
+        .style = BUTTON_STYLE_OPERATOR,
+    },
 };
 
 // ---------------------------------------------------------------------------
@@ -198,38 +178,12 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
 
 void calc_buttons_init(void) {
   int idx = 0;
-
-  // Row 0: 4 buttons, each 1 column wide
-  for (int col = 0; col < 4; col++) {
-    s_buttons[idx].bounds = CELL_RECT(0, col, 1);
-    idx++;
+  for (int row = 0; row < GRID_ROWS; row++) {
+    for (int col = 0; col < GRID_COLS; col++) {
+      s_buttons[idx].bounds = CELL_RECT(row, col, 1);
+      idx++;
+    }
   }
-
-  // Row 1: 4 buttons
-  for (int col = 0; col < 4; col++) {
-    s_buttons[idx].bounds = CELL_RECT(1, col, 1);
-    idx++;
-  }
-
-  // Row 2: 4 buttons
-  for (int col = 0; col < 4; col++) {
-    s_buttons[idx].bounds = CELL_RECT(2, col, 1);
-    idx++;
-  }
-
-  // Row 3: 4 buttons
-  for (int col = 0; col < 4; col++) {
-    s_buttons[idx].bounds = CELL_RECT(3, col, 1);
-    idx++;
-  }
-
-  // Row 4: 0 (spans 2 cols), ., =
-  s_buttons[idx].bounds = CELL_RECT(4, 0, 2); // "0" — 2 cols wide
-  idx++;
-  s_buttons[idx].bounds = CELL_RECT(4, 2, 1); // "."
-  idx++;
-  s_buttons[idx].bounds = CELL_RECT(4, 3, 1); // "=" / "ENT"
-  idx++;
 }
 
 // ---------------------------------------------------------------------------

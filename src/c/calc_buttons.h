@@ -22,7 +22,7 @@ typedef struct {
 } CalcButton;
 
 // Number of buttons
-#define CALC_BUTTON_COUNT 19
+#define CALC_BUTTON_COUNT 16
 
 // Initialize button layout (call once)
 void calc_buttons_init(void);

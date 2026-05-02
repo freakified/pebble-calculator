@@ -7,7 +7,7 @@
 // Layout constants
 // ---------------------------------------------------------------------------
 
-#define DISPLAY_HEIGHT 52
+#define DISPLAY_HEIGHT 44
 #define DISPLAY_PAD_X 6
 #define DISPLAY_PAD_Y 2
 
@@ -27,7 +27,7 @@
 #define COLOR_FUNC_BG GColorCobaltBlue
 #define COLOR_FUNC_TEXT GColorWhite
 
-#define COLOR_ENT_BG GColorIslamicGreen
+#define COLOR_ENT_BG GColorBlue
 #define COLOR_ENT_TEXT GColorWhite
 
 #define COLOR_GRID_BORDER GColorWhite
@@ -81,63 +81,30 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
   graphics_fill_rect(ctx, GRect(0, 0, bounds.size.w, DISPLAY_HEIGHT), 0,
                      GCornerNone);
 
-  bool rpn = s_engine->rpn_mode;
+  const CalcFonts *fonts = calc_fonts_get();
+  const int text_w = bounds.size.w - DISPLAY_PAD_X * 2;
 
-  if (rpn) {
-    // RPN mode: show Y register (secondary) + X register (primary)
-    const CalcFonts *fonts = calc_fonts_get();
-
-    char buf[CALC_DISPLAY_MAX + 4];
-
-    // Y register
-    calc_engine_get_stack_display(s_engine, 2, buf, sizeof(buf));
-    graphics_context_set_text_color(ctx, COLOR_DISPLAY_SEC);
-    graphics_draw_text(ctx, buf, fonts->y_register,
-                       GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y - 4,
-                             bounds.size.w - DISPLAY_PAD_X * 2, 28),
-                       GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
-                       NULL);
-    graphics_draw_text(ctx, "Y:", fonts->indicator,
-                       GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y + 2, 22, 20),
-                       GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft,
-                       NULL);
-
-    // X register (primary)
-    const char *x_str = calc_engine_get_x_display(s_engine);
-    graphics_context_set_text_color(ctx, COLOR_DISPLAY_TEXT);
-    graphics_draw_text(ctx, x_str, fonts->x_register,
-                       GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y + 18,
-                             bounds.size.w - DISPLAY_PAD_X * 2, 32),
-                       GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
-                       NULL);
-    graphics_context_set_text_color(ctx, COLOR_DISPLAY_SEC);
-    graphics_draw_text(ctx, "X:", fonts->indicator,
-                       GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y + 24, 22, 20),
-                       GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft,
-                       NULL);
+  // Secondary line: Y register (RPN) or pending operand + operator (standard).
+  char sec_buf[CALC_DISPLAY_MAX + 4];
+  if (s_engine->rpn_mode) {
+    calc_engine_get_stack_display(s_engine, 2, sec_buf, sizeof(sec_buf));
   } else {
-    // Standard mode: secondary line + primary line
-    const CalcFonts *fonts = calc_fonts_get();
-
-    // Secondary (pending operand + operator)
-    char sec_buf[32];
     calc_engine_get_secondary_display(s_engine, sec_buf, sizeof(sec_buf));
-    graphics_context_set_text_color(ctx, COLOR_DISPLAY_SEC);
-    graphics_draw_text(ctx, sec_buf, fonts->y_register,
-                       GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y - 4,
-                             bounds.size.w - DISPLAY_PAD_X * 2, 28),
-                       GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
-                       NULL);
-
-    // Primary (current entry / result)
-    const char *x_str = calc_engine_get_x_display(s_engine);
-    graphics_context_set_text_color(ctx, COLOR_DISPLAY_TEXT);
-    graphics_draw_text(ctx, x_str, fonts->x_register,
-                       GRect(DISPLAY_PAD_X, DISPLAY_PAD_Y + 18,
-                             bounds.size.w - DISPLAY_PAD_X * 2, 32),
-                       GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
-                       NULL);
   }
+  graphics_context_set_text_color(ctx, COLOR_DISPLAY_SEC);
+  // Negative y trims GOTHIC's top padding so the line sits flush at the top.
+  graphics_draw_text(ctx, sec_buf, fonts->indicator,
+                     GRect(DISPLAY_PAD_X, -4, text_w, 18),
+                     GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
+                     NULL);
+
+  // Primary line: X register, large.
+  const char *x_str = calc_engine_get_x_display(s_engine);
+  graphics_context_set_text_color(ctx, COLOR_DISPLAY_TEXT);
+  graphics_draw_text(ctx, x_str, fonts->x_register,
+                     GRect(DISPLAY_PAD_X, 8, text_w, 32),
+                     GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
+                     NULL);
 
   // Separator line
   graphics_context_set_stroke_color(ctx, COLOR_SEPARATOR);
