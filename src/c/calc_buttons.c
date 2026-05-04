@@ -17,7 +17,6 @@
 static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
     // Grid row 1: 7, 8, 9, ÷
     {
-        .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "7",
         .rpn_label = NULL,
         .action = CALC_ACTION_DIGIT_7,
@@ -25,7 +24,6 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
         .style = BUTTON_STYLE_NUMBER,
     },
     {
-        .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "8",
         .rpn_label = NULL,
         .action = CALC_ACTION_DIGIT_8,
@@ -33,7 +31,6 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
         .style = BUTTON_STYLE_NUMBER,
     },
     {
-        .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "9",
         .rpn_label = NULL,
         .action = CALC_ACTION_DIGIT_9,
@@ -41,7 +38,6 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
         .style = BUTTON_STYLE_NUMBER,
     },
     {
-        .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "",
         .rpn_label = NULL,
         .action = CALC_ACTION_DIVIDE,
@@ -52,7 +48,6 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
 
     // Grid row 2: 4, 5, 6, ×
     {
-        .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "4",
         .rpn_label = NULL,
         .action = CALC_ACTION_DIGIT_4,
@@ -60,7 +55,6 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
         .style = BUTTON_STYLE_NUMBER,
     },
     {
-        .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "5",
         .rpn_label = NULL,
         .action = CALC_ACTION_DIGIT_5,
@@ -68,7 +62,6 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
         .style = BUTTON_STYLE_NUMBER,
     },
     {
-        .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "6",
         .rpn_label = NULL,
         .action = CALC_ACTION_DIGIT_6,
@@ -76,7 +69,6 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
         .style = BUTTON_STYLE_NUMBER,
     },
     {
-        .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "",
         .rpn_label = NULL,
         .action = CALC_ACTION_MULTIPLY,
@@ -87,7 +79,6 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
 
     // Grid row 3: 1, 2, 3, −
     {
-        .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "1",
         .rpn_label = NULL,
         .action = CALC_ACTION_DIGIT_1,
@@ -95,7 +86,6 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
         .style = BUTTON_STYLE_NUMBER,
     },
     {
-        .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "2",
         .rpn_label = NULL,
         .action = CALC_ACTION_DIGIT_2,
@@ -103,7 +93,6 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
         .style = BUTTON_STYLE_NUMBER,
     },
     {
-        .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "3",
         .rpn_label = NULL,
         .action = CALC_ACTION_DIGIT_3,
@@ -111,7 +100,6 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
         .style = BUTTON_STYLE_NUMBER,
     },
     {
-        .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "",
         .rpn_label = NULL,
         .action = CALC_ACTION_SUBTRACT,
@@ -122,7 +110,6 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
 
     // Grid row 4: 0, ., =(ENTER), +
     {
-        .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "0",
         .rpn_label = NULL,
         .action = CALC_ACTION_DIGIT_0,
@@ -130,7 +117,6 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
         .style = BUTTON_STYLE_NUMBER,
     },
     {
-        .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = ".",
         .rpn_label = NULL,
         .action = CALC_ACTION_DOT,
@@ -138,7 +124,6 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
         .style = BUTTON_STYLE_NUMBER,
     },
     {
-        .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "",
         .rpn_label = "ENTER",
         .action = CALC_ACTION_EQUALS,
@@ -147,7 +132,6 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
         .icon = CALC_ICON_EQUALS,
     },
     {
-        .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "",
         .rpn_label = NULL,
         .action = CALC_ACTION_ADD,
@@ -158,7 +142,6 @@ static CalcButton s_buttons[CALC_BUTTON_COUNT] = {
 
     // C button (index 16) — placed in grid cell (0, 0) by calc_buttons_init.
     {
-        .bounds = {.origin = {0, 0}, .size = {0, 0}},
         .label = "",
         .rpn_label = NULL,
         .action = CALC_ACTION_CLEAR,

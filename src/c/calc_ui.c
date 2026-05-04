@@ -42,6 +42,48 @@ static int s_pressed_index = -1;
 // Drawing helpers
 // ---------------------------------------------------------------------------
 
+// If str has a fractional part whose tail is 4+ identical digits, write a
+// shortened version into buf that fills up to max_digits total digits, then
+// return buf. Otherwise returns str unchanged. Only useful for period-1
+// repeating decimals.
+static const char *prv_shorten_repeating(const char *str, char *buf,
+                                         int buf_size, int max_digits) {
+  const char *dot = strchr(str, '.');
+  if (!dot)
+    return str;
+  const char *frac = dot + 1;
+  int frac_len = (int)strlen(frac);
+  if (frac_len < 5)
+    return str;
+
+  char last = frac[frac_len - 1];
+  int run = 0;
+  for (int i = frac_len - 1; i >= 0 && frac[i] == last; i--)
+    run++;
+  if (run < 4)
+    return str;
+
+  int int_digit_count = 0;
+  for (const char *p = str; p < dot; p++) {
+    if (*p >= '0' && *p <= '9')
+      int_digit_count++;
+  }
+
+  int keep_frac = max_digits - int_digit_count;
+  if (keep_frac < 1)
+    keep_frac = 1;
+  if (keep_frac >= frac_len)
+    return str;
+
+  int total = (int)(dot - str) + 1 + keep_frac; // +1 for '.'
+  if (total >= buf_size)
+    return str;
+
+  memcpy(buf, str, total);
+  buf[total] = '\0';
+  return buf;
+}
+
 static void prv_get_button_colors(const CalcButton *btn, bool pressed,
                                   GColor *bg, GColor *text) {
   if (pressed) {
@@ -103,23 +145,41 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
 
   // Primary line: X register, large.
   // Font tiers: ≤7 digits → LECO 32 Bold, 8+ digits or sci notation → GOTHIC 28
-  // Bold.
+  // Bold. Repeating-decimal tails are shortened before the digit count so they
+  // don't needlessly push the display into the compact font.
   const char *x_str = calc_engine_get_x_display(s_engine);
+
   int digit_count = 0;
   for (const char *p = x_str; *p; p++) {
     if (*p >= '0' && *p <= '9')
       digit_count++;
   }
-  bool use_gothic = (digit_count > CALC_X_MAX_DIGITS_LECO) ||
-                    (strchr(x_str, 'e') != NULL) || s_engine->error;
-  GFont x_font = use_gothic ? fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD)
-                            : fonts->x_register;
+
+  char x_short_buf[CALC_DISPLAY_MAX + 1];
+  const char *x_display = x_str;
+  if (digit_count > CALC_X_MAX_DIGITS_LECO && !s_engine->error &&
+      strchr(x_str, 'e') == NULL) {
+    x_display = prv_shorten_repeating(x_str, x_short_buf, sizeof(x_short_buf),
+                                      CALC_X_MAX_DIGITS_LECO);
+    if (x_display != x_str) {
+      digit_count = 0;
+      for (const char *p = x_display; *p; p++) {
+        if (*p >= '0' && *p <= '9')
+          digit_count++;
+      }
+    }
+  }
+
+  bool use_compact_font = (digit_count > CALC_X_MAX_DIGITS_LECO) ||
+                          (strchr(x_display, 'e') != NULL) || s_engine->error;
+  GFont x_font = use_compact_font ? fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD)
+                                  : fonts->x_register;
   graphics_context_set_text_color(ctx, s_engine->error ? GColorDarkCandyAppleRed
                                                        : COLOR_DISPLAY_TEXT);
   graphics_draw_text(
-      ctx, x_str, x_font,
-      GRect(text_left - (use_gothic ? 2 : 0),
-            10 + CALC_GRID_OFFSET_Y + (use_gothic ? 2 : 0), text_w, 32),
+      ctx, x_display, x_font,
+      GRect(text_left - (use_compact_font ? 2 : 0),
+            10 + CALC_GRID_OFFSET_Y + (use_compact_font ? 2 : 0), text_w, 32),
       GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
 }
 
