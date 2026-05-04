@@ -35,7 +35,14 @@ module.exports = [
         "messageKey": "HAPTIC_FEEDBACK",
         "label": "Haptic Feedback",
         "defaultValue": true,
-        "description": "Provide a short vibration pulse when a button is pressed."
+        "description": "If enabled, watch vibrates slightly when buttons are pressed."
+      },
+      {
+        "type": "toggle",
+        "messageKey": "KEEP_BACKLIGHT",
+        "label": "Keep Backlight On",
+        "defaultValue": false,
+        "description": "If enabled, backlight will stay on while Calculator app is active."
       }
     ]
   },

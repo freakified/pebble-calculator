@@ -11,6 +11,7 @@
 #define PERSIST_KEY_RPN_MODE 1
 #define PERSIST_KEY_HAPTIC_FEEDBACK 2
 #define PERSIST_KEY_MAIN_NUMBER 3
+#define PERSIST_KEY_KEEP_BACKLIGHT 4
 
 // ---------------------------------------------------------------------------
 // Static state
@@ -21,6 +22,13 @@ static Layer *s_ui_layer;
 static CalcEngine s_engine;
 static int s_pressed_button = -1;
 static bool s_haptic_feedback = true;
+static bool s_keep_backlight = false;
+
+static const uint32_t s_vibe_durations[] = {50};
+static const VibePattern s_vibe_pattern = {
+  .durations = s_vibe_durations,
+  .num_segments = 1
+};
 
 // ---------------------------------------------------------------------------
 // Touch handling
@@ -34,7 +42,7 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
         s_pressed_button = idx;
         calc_ui_set_pressed(idx);
         if (s_haptic_feedback) {
-          vibes_short_pulse();
+          vibes_enqueue_custom_pattern(s_vibe_pattern);
         }
         calc_ui_mark_dirty();
       }
@@ -117,6 +125,14 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
     persist_write_bool(PERSIST_KEY_HAPTIC_FEEDBACK, s_haptic_feedback);
     APP_LOG(APP_LOG_LEVEL_INFO, "Haptic feedback set to %d", s_haptic_feedback);
   }
+
+  Tuple *backlight_tuple = dict_find(iter, MESSAGE_KEY_KEEP_BACKLIGHT);
+  if (backlight_tuple) {
+    s_keep_backlight = backlight_tuple->value->int32 != 0;
+    persist_write_bool(PERSIST_KEY_KEEP_BACKLIGHT, s_keep_backlight);
+    light_enable(s_keep_backlight);
+    APP_LOG(APP_LOG_LEVEL_INFO, "Keep backlight set to %d", s_keep_backlight);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -154,6 +170,12 @@ static void prv_window_load(Window *window) {
     s_haptic_feedback = persist_read_bool(PERSIST_KEY_HAPTIC_FEEDBACK);
   }
 
+  // Restore backlight setting
+  if (persist_exists(PERSIST_KEY_KEEP_BACKLIGHT)) {
+    s_keep_backlight = persist_read_bool(PERSIST_KEY_KEEP_BACKLIGHT);
+    light_enable(s_keep_backlight);
+  }
+
   // Create UI
   s_ui_layer = calc_ui_create(bounds);
   calc_ui_set_engine(&s_engine);
@@ -168,6 +190,7 @@ static void prv_window_load(Window *window) {
 static void prv_window_unload(Window *window) {
   double main_num = calc_engine_get_main_number(&s_engine);
   persist_write_data(PERSIST_KEY_MAIN_NUMBER, &main_num, sizeof(double));
+  light_enable(false);
 
   touch_service_unsubscribe();
   calc_ui_destroy(s_ui_layer);
