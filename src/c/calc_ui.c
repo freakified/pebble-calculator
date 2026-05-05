@@ -212,7 +212,7 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
 
   // Secondary line: Y register (RPN) or pending operand + operator (standard).
   // Skipped while typing — the X register's primary line conveys the entry.
-  char sec_buf[CALC_DISPLAY_MAX + 4];
+  char sec_buf[CALC_SECONDARY_BUF_SIZE];
   if (s_engine->rpn_mode) {
     calc_engine_get_stack_display(s_engine, 2, sec_buf, sizeof(sec_buf));
   } else {

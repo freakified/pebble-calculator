@@ -1,6 +1,7 @@
 #pragma once
 
 #include <pebble.h>
+#include "calc_format.h"
 
 // Maximum characters in the display buffer (must hold 13 digits + sign + dot + null)
 #define CALC_DISPLAY_MAX 16
@@ -101,6 +102,21 @@ typedef enum {
   CALC_OP_NTHROOT,
 } CalcOp;
 
+// Max depth of the standard-mode operator-precedence stack. Right-associative
+// power chains are the worst case; 8 leaves comfortable headroom on a watch UI.
+#define CALC_OP_STACK_DEPTH 8
+
+// Worst-case secondary-display buffer: every op-stack frame rendered as
+// "value op " plus the post-'=' tape view, which adds one more term (right
+// operand) and " =". The renderer right-aligns and ellipsis-clips, so the
+// full string must fit here for the oldest frames to elide correctly.
+#define CALC_SECONDARY_BUF_SIZE ((CALC_OP_STACK_DEPTH + 1) * (CALC_FORMAT_BUF_SIZE + 4))
+
+typedef struct {
+  double value;
+  CalcOp op;
+} CalcOpFrame;
+
 // Calculator state
 typedef struct {
   // Mode
@@ -112,9 +128,23 @@ typedef struct {
   bool has_dot;
   bool entering;       // true while user is typing digits
 
-  // Standard mode state
-  double pending_value;
-  CalcOp pending_op;
+  // Standard mode: operator-precedence stack. Each frame is a deferred
+  // (left-operand, operator) pair waiting for its right operand. On a new
+  // operator, fold the top while its precedence allows; on '=', drain.
+  CalcOpFrame op_stack[CALC_OP_STACK_DEPTH];
+  int         op_stack_size;
+
+  // Post-'=' "tape" view: snapshot of the just-completed expression (e.g.
+  // "2 + 3 x 4 ="). Shown on the secondary line whenever the op_stack is
+  // empty. Cleared by any subsequent user action that mutates X.
+  char last_expression[CALC_SECONDARY_BUF_SIZE];
+
+  // Standard mode: entry holds a freshly-computed value (unary result,
+  // constant, MR) that should serve as the right operand for the next binary
+  // operator. Distinguishes "post-unary, entering=false" from "just pressed an
+  // operator, entering=false" — the latter wants change-my-mind, the former
+  // wants fold-and-push.
+  bool right_committed;
 
   // RPN stack (T, Z, Y, X — index 0=T, 3=X)
   double stack[4];

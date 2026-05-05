@@ -109,6 +109,34 @@ static CalcOp prv_action_to_op(CalcAction action) {
   }
 }
 
+static const char *prv_op_to_str(CalcOp op) {
+  switch (op) {
+    case CALC_OP_ADD:      return "+";
+    case CALC_OP_SUBTRACT: return "-";
+    case CALC_OP_MULTIPLY: return "x";
+    case CALC_OP_DIVIDE:   return "/";
+    case CALC_OP_POWER:    return "^";
+    case CALC_OP_NTHROOT:  return "rt";
+    default:               return "";
+  }
+}
+
+static int prv_op_precedence(CalcOp op) {
+  switch (op) {
+    case CALC_OP_ADD:
+    case CALC_OP_SUBTRACT: return 1;
+    case CALC_OP_MULTIPLY:
+    case CALC_OP_DIVIDE:   return 2;
+    case CALC_OP_POWER:
+    case CALC_OP_NTHROOT:  return 3;
+    default:               return 0;
+  }
+}
+
+static bool prv_op_is_right_assoc(CalcOp op) {
+  return op == CALC_OP_POWER || op == CALC_OP_NTHROOT;
+}
+
 // RPN stack helpers
 static void prv_stack_push(CalcEngine *e, double val) {
   // Shift up: T is lost, Z←Y, Y←X, X←val
@@ -142,6 +170,10 @@ static void prv_terminate_entry(CalcEngine *e) {
 
 static void prv_handle_digit(CalcEngine *e, int digit) {
   if (e->error) prv_recover_from_error(e);
+
+  // A typed digit always starts a fresh right operand, replacing any committed
+  // result (unary/constant/MR) sitting in entry.
+  e->right_committed = false;
 
   if (e->rpn_mode && !e->entering && e->stack_lift_enabled) {
     // Lift the stack before starting new entry
@@ -190,6 +222,8 @@ static void prv_handle_digit(CalcEngine *e, int digit) {
 static void prv_handle_dot(CalcEngine *e) {
   if (e->error) prv_recover_from_error(e);
 
+  e->right_committed = false;
+
   if (e->rpn_mode && !e->entering && e->stack_lift_enabled) {
     prv_stack_push(e, prv_entry_to_double(e));
   }
@@ -217,41 +251,96 @@ static void prv_handle_dot(CalcEngine *e) {
 // Standard mode operations
 // ---------------------------------------------------------------------------
 
-static void prv_standard_evaluate(CalcEngine *e) {
-  if (e->pending_op == CALC_OP_NONE) return;
+// Pop the top frame and apply its op to the current entry, writing the result
+// back into entry. Returns false (and sets engine error) on math failure.
+static bool prv_op_stack_fold_top(CalcEngine *e) {
+  CalcOpFrame top = e->op_stack[e->op_stack_size - 1];
+  e->op_stack_size--;
 
   double right = prv_entry_to_double(e);
-  double result = prv_apply_op(e->pending_value, e->pending_op, right);
+  double result = prv_apply_op(top.value, top.op, right);
 
   if (prv_is_nan_or_inf(result) || prv_is_error(result)) {
     prv_set_error(e);
-    e->pending_op = CALC_OP_NONE;
-    return;
+    return false;
   }
-
   prv_double_to_entry(e, result);
-  e->pending_op = CALC_OP_NONE;
-  e->pending_value = 0;
+  return true;
+}
+
+// Snapshot the post-'=' tape view BEFORE the drain runs, while frames and the
+// right operand (in entry) are still intact. Format: "v0 op0 v1 op1 ... R =".
+static void prv_snapshot_expression(CalcEngine *e) {
+  char *buf = e->last_expression;
+  int buf_size = (int)sizeof(e->last_expression);
+  buf[0] = '\0';
+  int written = 0;
+  for (int i = 0; i < e->op_stack_size; i++) {
+    CalcOpFrame f = e->op_stack[i];
+    char val_buf[CALC_FORMAT_BUF_SIZE];
+    calc_format_double(f.value, val_buf, NULL);
+    int n = snprintf(buf + written, buf_size - written, "%s %s ",
+                     val_buf, prv_op_to_str(f.op));
+    if (n < 0 || n >= buf_size - written) { buf[0] = '\0'; return; }
+    written += n;
+  }
+  char r_buf[CALC_FORMAT_BUF_SIZE];
+  calc_format_double(prv_entry_to_double(e), r_buf, NULL);
+  int n = snprintf(buf + written, buf_size - written, "%s =", r_buf);
+  if (n < 0 || n >= buf_size - written) buf[0] = '\0';
+}
+
+static void prv_standard_evaluate(CalcEngine *e) {
+  if (e->op_stack_size == 0) return;
+  prv_snapshot_expression(e);
+  while (e->op_stack_size > 0) {
+    if (!prv_op_stack_fold_top(e)) {
+      // Drain failed (overflow / NaN). Don't show a partial-state snapshot.
+      e->last_expression[0] = '\0';
+      return;
+    }
+  }
+  e->right_committed = false;
 }
 
 static void prv_standard_operator(CalcEngine *e, CalcAction action) {
   if (e->error) return;
 
-  // If there's a pending operation, evaluate it first (chaining)
-  if (e->pending_op != CALC_OP_NONE && e->entering) {
-    double right = prv_entry_to_double(e);
-    double result = prv_apply_op(e->pending_value, e->pending_op, right);
-    if (prv_is_nan_or_inf(result) || prv_is_error(result)) {
-      prv_set_error(e);
-      e->pending_op = CALC_OP_NONE;
-      return;
+  CalcOp new_op = prv_action_to_op(action);
+
+  // No operand was typed since the last op press (or =), and entry doesn't
+  // hold a committed result either — the user is just changing their mind
+  // about which operator to apply. Replace the top frame's op (or push a fresh
+  // frame if the stack is empty).
+  if (!e->entering && !e->right_committed) {
+    if (e->op_stack_size > 0) {
+      e->op_stack[e->op_stack_size - 1].op = new_op;
+    } else {
+      e->op_stack[0].value = prv_entry_to_double(e);
+      e->op_stack[0].op    = new_op;
+      e->op_stack_size = 1;
     }
-    prv_double_to_entry(e, result);
+    return;
   }
 
-  e->pending_value = prv_entry_to_double(e);
-  e->pending_op = prv_action_to_op(action);
+  // Fold any deferred ops whose precedence binds tighter than the new op.
+  // For right-associative new ops (^, nthroot), only fold when strictly tighter.
+  int new_prec = prv_op_precedence(new_op);
+  bool right_assoc = prv_op_is_right_assoc(new_op);
+  while (e->op_stack_size > 0) {
+    int top_prec = prv_op_precedence(e->op_stack[e->op_stack_size - 1].op);
+    bool should_fold = (top_prec > new_prec) ||
+                       (top_prec == new_prec && !right_assoc);
+    if (!should_fold) break;
+    if (!prv_op_stack_fold_top(e)) return;
+  }
+
+  if (e->op_stack_size == CALC_OP_STACK_DEPTH) { prv_set_error(e); return; }
+  e->op_stack[e->op_stack_size].value = prv_entry_to_double(e);
+  e->op_stack[e->op_stack_size].op    = new_op;
+  e->op_stack_size++;
   e->entering = false;
+  e->right_committed = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -404,6 +493,8 @@ static void prv_handle_unary(CalcEngine *e, CalcAction action) {
   if (e->rpn_mode) {
     e->stack[3] = result;
     e->stack_lift_enabled = true;
+  } else {
+    e->right_committed = true;
   }
 }
 
@@ -422,6 +513,8 @@ static void prv_handle_constant(CalcEngine *e, double value) {
   prv_double_to_entry(e, value);
   if (e->rpn_mode) {
     e->stack[3] = value;
+  } else {
+    e->right_committed = true;
   }
 }
 
@@ -457,6 +550,7 @@ static void prv_handle_memory(CalcEngine *e, CalcAction action) {
       }
       prv_double_to_entry(e, e->memory);
       if (e->rpn_mode) e->stack[3] = e->memory;
+      else e->right_committed = true;
       break;
     default: break;
   }
@@ -539,7 +633,6 @@ CalcAction calc_engine_resolve_2nd(CalcAction action, bool second_active) {
 void calc_engine_init(CalcEngine *engine) {
   memset(engine, 0, sizeof(CalcEngine));
   prv_clear_entry(engine);
-  engine->pending_op = CALC_OP_NONE;
   engine->stack_lift_enabled = false;
   engine->page = CALC_PAGE_BASIC;
   engine->second_active = false;
@@ -583,6 +676,11 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
   // auto-clears below after dispatch.
   CalcAction resolved = calc_engine_resolve_2nd(action, engine->second_active);
   bool clear_second_after = engine->second_active;
+
+  // Any non-modifier action invalidates the post-'=' tape view: the user is
+  // either starting a new computation or continuing from the result, so the
+  // snapshot no longer matches what's on screen. Equals re-populates after.
+  engine->last_expression[0] = '\0';
 
   // Backspace / Clear
   if (resolved == CALC_ACTION_BACKSPACE || resolved == CALC_ACTION_CLEAR) {
@@ -767,26 +865,30 @@ void calc_engine_get_secondary_display(CalcEngine *engine, char *buf, int buf_si
     return;
   }
 
-  // Standard mode: show pending operand and operator
-  if (engine->pending_op == CALC_OP_NONE) {
-    buf[0] = '\0';
+  // Standard mode: render every deferred (operand, operator) frame so the
+  // user can see what's queued behind the active term. The renderer right-
+  // aligns with trailing ellipsis, so deep stacks elide oldest-first.
+  buf[0] = '\0';
+  if (engine->op_stack_size == 0) {
+    // No active stack: show the post-'=' tape snapshot if one is set, so
+    // the user can see what they just calculated alongside the result.
+    if (engine->last_expression[0] != '\0') {
+      snprintf(buf, buf_size, "%s", engine->last_expression);
+    }
     return;
   }
 
-  const char *op_str = "";
-  switch (engine->pending_op) {
-    case CALC_OP_ADD:      op_str = "+"; break;
-    case CALC_OP_SUBTRACT: op_str = "-"; break;
-    case CALC_OP_MULTIPLY: op_str = "x"; break;
-    case CALC_OP_DIVIDE:   op_str = "/"; break;
-    case CALC_OP_POWER:    op_str = "^"; break;
-    case CALC_OP_NTHROOT:  op_str = "rt"; break;
-    default: break;
+  int written = 0;
+  for (int i = 0; i < engine->op_stack_size; i++) {
+    CalcOpFrame f = engine->op_stack[i];
+    char val_buf[CALC_FORMAT_BUF_SIZE];
+    calc_format_double(f.value, val_buf, NULL);
+    int n = snprintf(buf + written, buf_size - written,
+                     (i == 0) ? "%s %s" : " %s %s",
+                     val_buf, prv_op_to_str(f.op));
+    if (n < 0 || n >= buf_size - written) break;
+    written += n;
   }
-
-  char val_buf[CALC_FORMAT_BUF_SIZE];
-  calc_format_double(engine->pending_value, val_buf, NULL);
-  snprintf(buf, buf_size, "%s %s", val_buf, op_str);
 }
 
 double calc_engine_get_main_number(CalcEngine *engine) {
