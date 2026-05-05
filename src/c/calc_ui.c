@@ -12,6 +12,16 @@
 #define DISPLAY_PAD_X 6
 #define DISPLAY_PAD_Y 2
 
+// Page-indicator dot geometry — drawn in the display row, top-left of the
+// text region, so it doesn't fight the right-aligned secondary text.
+#define PAGE_DOT_RADIUS 2
+#define PAGE_DOT_SPACING 7
+#define PAGE_DOT_X_BASE (CALC_CELL_W + 4)
+#define PAGE_DOT_Y (CALC_GRID_OFFSET_Y + 6)
+
+// Chip (DEG/RAD/2nd) geometry — small text directly below the page dots.
+#define CHIP_Y (CALC_GRID_OFFSET_Y + 12)
+
 // Colors
 #define COLOR_BG GColorBlack
 #define COLOR_DISPLAY_BG GColorWhite
@@ -29,6 +39,18 @@
 
 #define COLOR_ENT_BG GColorBlue
 #define COLOR_ENT_TEXT GColorWhite
+
+// Scientific function buttons (sin/log/etc.) and memory/stack ops.
+#define COLOR_FUNC_BG GColorCobaltBlue
+#define COLOR_FUNC_TEXT GColorWhite
+
+// 2nd modifier — yellow when active, FUNC color when inactive.
+#define COLOR_MOD_ACTIVE_BG GColorYellow
+#define COLOR_MOD_ACTIVE_TEXT GColorBlack
+
+// Page-indicator dot colors.
+#define COLOR_DOT_INACTIVE GColorLightGray
+#define COLOR_DOT_ACTIVE GColorBlack
 
 // ---------------------------------------------------------------------------
 // Static state
@@ -85,7 +107,7 @@ static const char *prv_shorten_repeating(const char *str, char *buf,
 }
 
 static void prv_get_button_colors(const CalcButton *btn, bool pressed,
-                                  GColor *bg, GColor *text) {
+                                  bool second_active, GColor *bg, GColor *text) {
   if (pressed) {
     *bg = GColorWhite;
     *text = GColorBlack;
@@ -109,7 +131,63 @@ static void prv_get_button_colors(const CalcButton *btn, bool pressed,
     *bg = COLOR_CLEAR_BG;
     *text = COLOR_CLEAR_TEXT;
     break;
+  case BUTTON_STYLE_FUNC:
+    *bg = COLOR_FUNC_BG;
+    *text = COLOR_FUNC_TEXT;
+    break;
+  case BUTTON_STYLE_MOD:
+    if (second_active) {
+      *bg = COLOR_MOD_ACTIVE_BG;
+      *text = COLOR_MOD_ACTIVE_TEXT;
+    } else {
+      *bg = COLOR_FUNC_BG;
+      *text = COLOR_FUNC_TEXT;
+    }
+    break;
+  case BUTTON_STYLE_NONE:
+  default:
+    *bg = COLOR_BG;
+    *text = COLOR_BG;
+    break;
   }
+}
+
+static void prv_draw_page_indicator(GContext *ctx, int active_page) {
+  for (int i = 0; i < CALC_PAGE_COUNT; i++) {
+    GColor c = (i == active_page) ? COLOR_DOT_ACTIVE : COLOR_DOT_INACTIVE;
+    graphics_context_set_fill_color(ctx, c);
+    int x = PAGE_DOT_X_BASE + i * PAGE_DOT_SPACING;
+    graphics_fill_circle(ctx, GPoint(x, PAGE_DOT_Y), PAGE_DOT_RADIUS);
+  }
+}
+
+static void prv_draw_chips(GContext *ctx) {
+  if (!s_engine) return;
+  const CalcFonts *fonts = calc_fonts_get();
+
+  // Chip text — concatenate active chips left-to-right.
+  // DEG/RAD only on scientific page; 2nd whenever active.
+  char buf[16];
+  buf[0] = '\0';
+
+  if (s_engine->page == CALC_PAGE_SCI) {
+    if (s_engine->deg_mode) {
+      strcat(buf, "DEG");
+    } else {
+      strcat(buf, "RAD");
+    }
+  }
+  if (s_engine->second_active) {
+    if (buf[0] != '\0') strcat(buf, " ");
+    strcat(buf, "2nd");
+  }
+
+  if (buf[0] == '\0') return;
+
+  graphics_context_set_text_color(ctx, COLOR_DISPLAY_SEC);
+  graphics_draw_text(ctx, buf, fonts->indicator,
+                     GRect(PAGE_DOT_X_BASE - 2, CHIP_Y, 60, 18),
+                     GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 }
 
 static void prv_draw_display(GContext *ctx, GRect bounds) {
@@ -128,18 +206,28 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
   const int text_left = CALC_CELL_W;
   const int text_w = bounds.size.w - text_left - DISPLAY_PAD_X + 6;
 
+  // Page dots and chips occupy the left side of the display row.
+  prv_draw_page_indicator(ctx, s_engine->page);
+  prv_draw_chips(ctx);
+
   // Secondary line: Y register (RPN) or pending operand + operator (standard).
+  // Skipped while typing — the X register's primary line conveys the entry.
   char sec_buf[CALC_DISPLAY_MAX + 4];
   if (s_engine->rpn_mode) {
     calc_engine_get_stack_display(s_engine, 2, sec_buf, sizeof(sec_buf));
   } else {
     calc_engine_get_secondary_display(s_engine, sec_buf, sizeof(sec_buf));
   }
-  graphics_context_set_text_color(ctx, COLOR_DISPLAY_SEC);
-  // Negative y trims GOTHIC's top padding so the line sits flush at the top.
 
+  // Reserve enough horizontal space on the left for the page dots + chip text
+  // before clipping the secondary value into the remaining width.
+  const int sec_left_reserved = 38;
+  const int sec_x = text_left + sec_left_reserved;
+  const int sec_w = text_w - sec_left_reserved - 2;
+
+  graphics_context_set_text_color(ctx, COLOR_DISPLAY_SEC);
   graphics_draw_text(ctx, sec_buf, fonts->indicator,
-                     GRect(text_left, CALC_GRID_OFFSET_Y - 2, text_w - 2, 18),
+                     GRect(sec_x, CALC_GRID_OFFSET_Y - 2, sec_w, 18),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
                      NULL);
 
@@ -184,19 +272,27 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
 }
 
 static void prv_draw_buttons(GContext *ctx, GRect bounds) {
+  if (!s_engine) return;
   int count = calc_buttons_get_count();
-  bool rpn = s_engine ? s_engine->rpn_mode : false;
+  bool rpn = s_engine->rpn_mode;
+  bool second = s_engine->second_active;
+  int page = s_engine->page;
 
   const CalcFonts *fonts = calc_fonts_get();
 
   for (int i = 0; i < count; i++) {
-    const CalcButton *btn = calc_buttons_get(i);
-    if (!btn)
+    const CalcButton *btn = calc_buttons_get(page, i);
+    if (!btn) continue;
+
+    // Skip buttons that are NONE-styled or NOOP for current mode (empty slots).
+    CalcAction effective_action = calc_button_get_action(btn, rpn);
+    if (btn->style == BUTTON_STYLE_NONE || effective_action == CALC_ACTION_NOOP) {
       continue;
+    }
 
     bool pressed = (i == s_pressed_index);
     GColor bg, text;
-    prv_get_button_colors(btn, pressed, &bg, &text);
+    prv_get_button_colors(btn, pressed, second, &bg, &text);
 
     // Fill button background
     graphics_context_set_fill_color(ctx, bg);
@@ -215,14 +311,15 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
     }
 
     // Draw label
-    const char *label = calc_button_get_label(btn, rpn);
+    const char *label = calc_button_get_label(btn, rpn, second);
     graphics_context_set_text_color(ctx, text);
 
     GFont font;
     int text_h;
     int y_offset;
 
-    if (btn->style == BUTTON_STYLE_NUMBER) {
+    if (btn->style == BUTTON_STYLE_NUMBER && strlen(label) <= 1) {
+      // Single digits or short single-char labels (π, e, ±) get the big number font.
       font = fonts->button_num;
       text_h = 32;
       y_offset = -5;

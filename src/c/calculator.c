@@ -12,6 +12,11 @@
 #define PERSIST_KEY_HAPTIC_FEEDBACK 2
 #define PERSIST_KEY_MAIN_NUMBER 3
 #define PERSIST_KEY_KEEP_BACKLIGHT 4
+#define PERSIST_KEY_DEG_MODE 5
+#define PERSIST_KEY_MEMORY 6
+// NOTE: the current page is intentionally NOT persisted — the app always
+// opens on the basic page so quick calculations don't require navigating
+// back from leftover scientific/memory pages.
 
 // ---------------------------------------------------------------------------
 // Static state
@@ -37,7 +42,8 @@ static const VibePattern s_vibe_pattern = {
 static void prv_touch_handler(const TouchEvent *event, void *context) {
   switch (event->type) {
     case TouchEvent_Touchdown: {
-      int idx = calc_buttons_hit_test(GPoint(event->x, event->y));
+      int idx = calc_buttons_hit_test(s_engine.page, GPoint(event->x, event->y),
+                                      s_engine.rpn_mode);
       if (idx >= 0) {
         s_pressed_button = idx;
         calc_ui_set_pressed(idx);
@@ -51,7 +57,7 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
 
     case TouchEvent_PositionUpdate: {
       if (s_pressed_button >= 0) {
-        const CalcButton *btn = calc_buttons_get(s_pressed_button);
+        const CalcButton *btn = calc_buttons_get(s_engine.page, s_pressed_button);
         GPoint p = GPoint(event->x, event->y);
         if (btn && !grect_contains_point(&btn->bounds, &p)) {
           s_pressed_button = -1;
@@ -64,9 +70,10 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
 
     case TouchEvent_Liftoff: {
       if (s_pressed_button >= 0) {
-        const CalcButton *btn = calc_buttons_get(s_pressed_button);
+        const CalcButton *btn = calc_buttons_get(s_engine.page, s_pressed_button);
         if (btn) {
           CalcAction action = calc_button_get_action(btn, s_engine.rpn_mode);
+          // The engine resolves the 2nd-modifier itself, so dispatch raw.
           calc_engine_handle_action(&s_engine, action);
         }
         s_pressed_button = -1;
@@ -82,8 +89,9 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
 // Physical button handlers (shortcuts)
 // ---------------------------------------------------------------------------
 
+// SELECT cycles through pages — the on-screen ± has moved to the scientific page.
 static void prv_select_click(ClickRecognizerRef recognizer, void *context) {
-  calc_engine_handle_action(&s_engine, CALC_ACTION_NEGATE);
+  calc_engine_handle_action(&s_engine, CALC_ACTION_PAGE_NEXT);
   calc_ui_mark_dirty();
 }
 
@@ -133,6 +141,15 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
     light_enable(s_keep_backlight);
     APP_LOG(APP_LOG_LEVEL_INFO, "Keep backlight set to %d", s_keep_backlight);
   }
+
+  Tuple *deg_tuple = dict_find(iter, MESSAGE_KEY_DEG_MODE);
+  if (deg_tuple) {
+    bool deg = deg_tuple->value->int32 != 0;
+    s_engine.deg_mode = deg;
+    persist_write_bool(PERSIST_KEY_DEG_MODE, deg);
+    calc_ui_mark_dirty();
+    APP_LOG(APP_LOG_LEVEL_INFO, "DEG mode set to %d", deg);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -176,6 +193,20 @@ static void prv_window_load(Window *window) {
     light_enable(s_keep_backlight);
   }
 
+  // Restore DEG/RAD mode (defaults to true=DEG via calc_engine_init).
+  if (persist_exists(PERSIST_KEY_DEG_MODE)) {
+    s_engine.deg_mode = persist_read_bool(PERSIST_KEY_DEG_MODE);
+  }
+
+  // Restore memory register
+  if (persist_exists(PERSIST_KEY_MEMORY)) {
+    double mem = 0.0;
+    persist_read_data(PERSIST_KEY_MEMORY, &mem, sizeof(double));
+    s_engine.memory = mem;
+  }
+
+  // Page is NOT restored — always start on basic. (See PERSIST_KEY note above.)
+
   // Create UI
   s_ui_layer = calc_ui_create(bounds);
   calc_ui_set_engine(&s_engine);
@@ -190,6 +221,7 @@ static void prv_window_load(Window *window) {
 static void prv_window_unload(Window *window) {
   double main_num = calc_engine_get_main_number(&s_engine);
   persist_write_data(PERSIST_KEY_MAIN_NUMBER, &main_num, sizeof(double));
+  persist_write_data(PERSIST_KEY_MEMORY, &s_engine.memory, sizeof(double));
   light_enable(false);
 
   touch_service_unsubscribe();

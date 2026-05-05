@@ -23,7 +23,8 @@
     "messageKeys": [
       "RPN_MODE",
       "HAPTIC_FEEDBACK",
-      "KEEP_BACKLIGHT"
+      "KEEP_BACKLIGHT",
+      "DEG_MODE"
     ],
     "resources": {
       "media": [

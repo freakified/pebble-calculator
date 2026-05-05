@@ -10,6 +10,12 @@
 // The minus sign DOES consume one digit slot.
 #define CALC_X_MAX_DIGITS_LECO 7
 
+// Number of pages cycled through by the SELECT button.
+#define CALC_PAGE_COUNT 3
+#define CALC_PAGE_BASIC 0
+#define CALC_PAGE_SCI 1
+#define CALC_PAGE_MEM 2
+
 // Actions that buttons can trigger
 typedef enum {
   CALC_ACTION_DIGIT_0 = 0,
@@ -34,6 +40,54 @@ typedef enum {
   // RPN-specific
   CALC_ACTION_ENTER,     // Push X onto stack
   CALC_ACTION_SWAP,      // Swap X <-> Y
+
+  // Scientific (unary)
+  CALC_ACTION_SIN,
+  CALC_ACTION_COS,
+  CALC_ACTION_TAN,
+  CALC_ACTION_ASIN,
+  CALC_ACTION_ACOS,
+  CALC_ACTION_ATAN,
+  CALC_ACTION_LN,
+  CALC_ACTION_LOG10,
+  CALC_ACTION_EXP,       // e^x
+  CALC_ACTION_POW10,     // 10^x
+  CALC_ACTION_SQRT,
+  CALC_ACTION_SQUARE,
+  CALC_ACTION_CUBE,
+  CALC_ACTION_CBRT,
+  CALC_ACTION_RECIP,
+  CALC_ACTION_FACT,
+
+  // Scientific (binary — chainable via the standard pending-op path or RPN-pop path)
+  CALC_ACTION_POW,       // y^x
+  CALC_ACTION_NTHROOT,   // x-th root of y
+
+  // Constants
+  CALC_ACTION_PI,
+  CALC_ACTION_E,
+
+  // Modifier
+  CALC_ACTION_2ND_TOGGLE,
+
+  // Memory
+  CALC_ACTION_M_PLUS,
+  CALC_ACTION_M_MINUS,
+  CALC_ACTION_M_RECALL,
+  CALC_ACTION_M_CLEAR,
+
+  // RPN stack ops
+  CALC_ACTION_ROLL_DOWN,
+  CALC_ACTION_ROLL_UP,
+  CALC_ACTION_DROP,
+  CALC_ACTION_STACK_CLEAR,
+  CALC_ACTION_LAST_X,
+
+  // Paging
+  CALC_ACTION_PAGE_NEXT,
+
+  // Sentinel for empty button slots
+  CALC_ACTION_NOOP,
 } CalcAction;
 
 // Pending operator for standard mode
@@ -43,6 +97,8 @@ typedef enum {
   CALC_OP_SUBTRACT,
   CALC_OP_MULTIPLY,
   CALC_OP_DIVIDE,
+  CALC_OP_POWER,
+  CALC_OP_NTHROOT,
 } CalcOp;
 
 // Calculator state
@@ -64,6 +120,13 @@ typedef struct {
   double stack[4];
   bool stack_lift_enabled;  // next digit entry should lift the stack
 
+  // Scientific calculator state
+  int  page;            // 0=basic, 1=scientific, 2=memory/stack
+  bool second_active;   // 2nd modifier sticky flag
+  bool deg_mode;        // true=degrees, false=radians
+  double memory;        // single memory register
+  double last_x;        // HP-style LASTx
+
   // Error state
   bool error;
 } CalcEngine;
@@ -76,6 +139,10 @@ void calc_engine_set_rpn_mode(CalcEngine *engine, bool rpn);
 
 // Process a button action
 void calc_engine_handle_action(CalcEngine *engine, CalcAction action);
+
+// Resolve an action through the 2nd-modifier (returns the inverse function
+// when second_active, otherwise the action itself unchanged).
+CalcAction calc_engine_resolve_2nd(CalcAction action, bool second_active);
 
 // Get the formatted display string for the X register / current entry
 const char *calc_engine_get_x_display(CalcEngine *engine);

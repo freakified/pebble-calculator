@@ -43,6 +43,13 @@ module.exports = [
         "label": "Keep Backlight On",
         "defaultValue": false,
         "description": "If enabled, backlight will stay on while Calculator app is active."
+      },
+      {
+        "type": "toggle",
+        "messageKey": "DEG_MODE",
+        "label": "Degrees (vs Radians)",
+        "defaultValue": true,
+        "description": "If enabled, trig functions use degrees. Disable to use radians."
       }
     ]
   },
