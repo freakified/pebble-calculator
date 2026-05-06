@@ -3,20 +3,7 @@
 #include "calc_buttons.h"
 #include "calc_ui.h"
 #include "calc_fonts.h"
-
-// ---------------------------------------------------------------------------
-// Persistent storage keys
-// ---------------------------------------------------------------------------
-
-#define PERSIST_KEY_RPN_MODE 1
-#define PERSIST_KEY_HAPTIC_FEEDBACK 2
-#define PERSIST_KEY_MAIN_NUMBER 3
-#define PERSIST_KEY_KEEP_BACKLIGHT 4
-#define PERSIST_KEY_DEG_MODE 5
-#define PERSIST_KEY_MEMORY 6
-// NOTE: the current page is intentionally NOT persisted — the app always
-// opens on the basic page so quick calculations don't require navigating
-// back from leftover scientific/memory pages.
+#include "calc_settings.h"
 
 // ---------------------------------------------------------------------------
 // Static state
@@ -26,8 +13,6 @@ static Window *s_window;
 static Layer *s_ui_layer;
 static CalcEngine s_engine;
 static int s_pressed_button = -1;
-static bool s_haptic_feedback = true;
-static bool s_keep_backlight = false;
 
 static const uint32_t s_vibe_durations[] = {50};
 static const VibePattern s_vibe_pattern = {
@@ -47,7 +32,7 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
       if (idx >= 0) {
         s_pressed_button = idx;
         calc_ui_set_pressed(idx);
-        if (s_haptic_feedback) {
+        if (calc_settings_haptic_enabled()) {
           vibes_enqueue_custom_pattern(s_vibe_pattern);
         }
         calc_ui_mark_dirty();
@@ -118,38 +103,8 @@ static void prv_click_config_provider(void *context) {
 // ---------------------------------------------------------------------------
 
 static void prv_inbox_received(DictionaryIterator *iter, void *context) {
-  Tuple *rpn_tuple = dict_find(iter, MESSAGE_KEY_RPN_MODE);
-  if (rpn_tuple) {
-    bool rpn = rpn_tuple->value->int32 != 0;
-    persist_write_bool(PERSIST_KEY_RPN_MODE, rpn);
-    calc_engine_set_rpn_mode(&s_engine, rpn);
-    calc_ui_mark_dirty();
-    APP_LOG(APP_LOG_LEVEL_INFO, "RPN mode set to %d", rpn);
-  }
-
-  Tuple *haptic_tuple = dict_find(iter, MESSAGE_KEY_HAPTIC_FEEDBACK);
-  if (haptic_tuple) {
-    s_haptic_feedback = haptic_tuple->value->int32 != 0;
-    persist_write_bool(PERSIST_KEY_HAPTIC_FEEDBACK, s_haptic_feedback);
-    APP_LOG(APP_LOG_LEVEL_INFO, "Haptic feedback set to %d", s_haptic_feedback);
-  }
-
-  Tuple *backlight_tuple = dict_find(iter, MESSAGE_KEY_KEEP_BACKLIGHT);
-  if (backlight_tuple) {
-    s_keep_backlight = backlight_tuple->value->int32 != 0;
-    persist_write_bool(PERSIST_KEY_KEEP_BACKLIGHT, s_keep_backlight);
-    light_enable(s_keep_backlight);
-    APP_LOG(APP_LOG_LEVEL_INFO, "Keep backlight set to %d", s_keep_backlight);
-  }
-
-  Tuple *deg_tuple = dict_find(iter, MESSAGE_KEY_DEG_MODE);
-  if (deg_tuple) {
-    bool deg = deg_tuple->value->int32 != 0;
-    s_engine.deg_mode = deg;
-    persist_write_bool(PERSIST_KEY_DEG_MODE, deg);
-    calc_ui_mark_dirty();
-    APP_LOG(APP_LOG_LEVEL_INFO, "DEG mode set to %d", deg);
-  }
+  calc_settings_handle_inbox(iter, &s_engine);
+  calc_ui_mark_dirty();
 }
 
 // ---------------------------------------------------------------------------
@@ -160,68 +115,22 @@ static void prv_window_load(Window *window) {
   Layer *root = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(root);
 
-  // Initialize button layout
   calc_buttons_init();
-
-  // Initialize fonts
   calc_fonts_init();
-
-  // Initialize calculator engine
   calc_engine_init(&s_engine);
+  calc_settings_load(&s_engine);
 
-  // Restore RPN mode from persistent storage
-  if (persist_exists(PERSIST_KEY_RPN_MODE)) {
-    bool rpn = persist_read_bool(PERSIST_KEY_RPN_MODE);
-    s_engine.rpn_mode = rpn;
-  }
-
-  // Restore main number
-  if (persist_exists(PERSIST_KEY_MAIN_NUMBER)) {
-    double main_num = 0.0;
-    persist_read_data(PERSIST_KEY_MAIN_NUMBER, &main_num, sizeof(double));
-    calc_engine_set_main_number(&s_engine, main_num);
-  }
-
-  // Restore haptic feedback setting
-  if (persist_exists(PERSIST_KEY_HAPTIC_FEEDBACK)) {
-    s_haptic_feedback = persist_read_bool(PERSIST_KEY_HAPTIC_FEEDBACK);
-  }
-
-  // Restore backlight setting
-  if (persist_exists(PERSIST_KEY_KEEP_BACKLIGHT)) {
-    s_keep_backlight = persist_read_bool(PERSIST_KEY_KEEP_BACKLIGHT);
-    light_enable(s_keep_backlight);
-  }
-
-  // Restore DEG/RAD mode (defaults to true=DEG via calc_engine_init).
-  if (persist_exists(PERSIST_KEY_DEG_MODE)) {
-    s_engine.deg_mode = persist_read_bool(PERSIST_KEY_DEG_MODE);
-  }
-
-  // Restore memory register
-  if (persist_exists(PERSIST_KEY_MEMORY)) {
-    double mem = 0.0;
-    persist_read_data(PERSIST_KEY_MEMORY, &mem, sizeof(double));
-    s_engine.memory = mem;
-  }
-
-  // Page is NOT restored — always start on basic. (See PERSIST_KEY note above.)
-
-  // Create UI
   s_ui_layer = calc_ui_create(bounds);
   calc_ui_set_engine(&s_engine);
   layer_add_child(root, s_ui_layer);
 
-  // Subscribe to touch
   if (touch_service_is_enabled()) {
     touch_service_subscribe(prv_touch_handler, NULL);
   }
 }
 
 static void prv_window_unload(Window *window) {
-  double main_num = calc_engine_get_main_number(&s_engine);
-  persist_write_data(PERSIST_KEY_MAIN_NUMBER, &main_num, sizeof(double));
-  persist_write_data(PERSIST_KEY_MEMORY, &s_engine.memory, sizeof(double));
+  calc_settings_save(&s_engine);
   light_enable(false);
 
   touch_service_unsubscribe();
@@ -234,11 +143,9 @@ static void prv_window_unload(Window *window) {
 // ---------------------------------------------------------------------------
 
 static void prv_init(void) {
-  // Open AppMessage for Clay config
   app_message_register_inbox_received(prv_inbox_received);
   app_message_open(128, 64);
 
-  // Create window
   s_window = window_create();
   window_set_background_color(s_window, GColorWhite);
   window_set_click_config_provider(s_window, prv_click_config_provider);
