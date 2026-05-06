@@ -301,6 +301,21 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
     GRect fill_rect = grect_inset(btn_rect, GEdgeInsets(2));
     graphics_fill_rect(ctx, fill_rect, 8, GCornersAll);
 
+    // C/DEL button: dynamic icon or label based on engine entry state.
+    if (i == 16) {
+      if (s_engine->entering) {
+        calc_icons_draw(ctx, CALC_ICON_BACKSPACE, fill_rect, text, bg);
+      } else {
+        const char *clabel = s_engine->just_cleared ? "AC" : "C";
+        int text_y = btn_rect.origin.y + (btn_rect.size.h - 24) / 2 - 6;
+        graphics_context_set_text_color(ctx, text);
+        graphics_draw_text(ctx, clabel, fonts->button_label,
+            GRect(btn_rect.origin.x, text_y, btn_rect.size.w, 24),
+            GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+      }
+      continue;
+    }
+
     // Icons take precedence over labels, except in RPN mode when an explicit
     // rpn_label is set (e.g. ENTER overrides the = icon).
     bool show_icon =

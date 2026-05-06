@@ -33,7 +33,7 @@ static CalcButton s_buttons[CALC_PAGE_COUNT][CALC_BUTTON_COUNT] = {
     { .label = "", .rpn_label = "ENTER", .action = CALC_ACTION_EQUALS, .rpn_action = CALC_ACTION_ENTER, .style = BUTTON_STYLE_ENTER, .icon = CALC_ICON_EQUALS },
     { .label = "", .action = CALC_ACTION_ADD, .rpn_action = CALC_ACTION_ADD, .style = BUTTON_STYLE_OPERATOR, .icon = CALC_ICON_PLUS },
     // [16] C/DEL
-    { .label = "", .action = CALC_ACTION_CLEAR, .rpn_action = CALC_ACTION_CLEAR, .style = BUTTON_STYLE_CLEAR, .icon = CALC_ICON_BACKSPACE },
+    { .label = "C", .action = CALC_ACTION_CLEAR, .rpn_action = CALC_ACTION_CLEAR, .style = BUTTON_STYLE_CLEAR, .icon = CALC_ICON_NONE },
   },
 
   // ===========================================================================
@@ -62,7 +62,7 @@ static CalcButton s_buttons[CALC_PAGE_COUNT][CALC_BUTTON_COUNT] = {
     { .label = "", .action = CALC_ACTION_NOOP, .rpn_action = CALC_ACTION_NOOP, .style = BUTTON_STYLE_NONE },
     { .label = "", .action = CALC_ACTION_NOOP, .rpn_action = CALC_ACTION_NOOP, .style = BUTTON_STYLE_NONE },
     // [16] C/DEL
-    { .label = "", .action = CALC_ACTION_CLEAR, .rpn_action = CALC_ACTION_CLEAR, .style = BUTTON_STYLE_CLEAR, .icon = CALC_ICON_BACKSPACE },
+    { .label = "C", .action = CALC_ACTION_CLEAR, .rpn_action = CALC_ACTION_CLEAR, .style = BUTTON_STYLE_CLEAR, .icon = CALC_ICON_NONE },
   },
 
   // ===========================================================================
@@ -91,7 +91,7 @@ static CalcButton s_buttons[CALC_PAGE_COUNT][CALC_BUTTON_COUNT] = {
     { .label = "", .action = CALC_ACTION_NOOP, .rpn_action = CALC_ACTION_NOOP, .style = BUTTON_STYLE_NONE },
     { .label = "", .action = CALC_ACTION_NOOP, .rpn_action = CALC_ACTION_NOOP, .style = BUTTON_STYLE_NONE },
     // [16] C/DEL
-    { .label = "", .action = CALC_ACTION_CLEAR, .rpn_action = CALC_ACTION_CLEAR, .style = BUTTON_STYLE_CLEAR, .icon = CALC_ICON_BACKSPACE },
+    { .label = "C", .action = CALC_ACTION_CLEAR, .rpn_action = CALC_ACTION_CLEAR, .style = BUTTON_STYLE_CLEAR, .icon = CALC_ICON_NONE },
   },
 };
 

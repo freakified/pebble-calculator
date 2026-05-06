@@ -682,6 +682,10 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
   // snapshot no longer matches what's on screen. Equals re-populates after.
   engine->last_expression[0] = '\0';
 
+  // Reset just_cleared on every action; the C-while-not-entering path overrides
+  // this back to true when appropriate.
+  engine->just_cleared = false;
+
   // Backspace / Clear
   if (resolved == CALC_ACTION_BACKSPACE || resolved == CALC_ACTION_CLEAR) {
     if (engine->error) {
@@ -718,16 +722,31 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
 
     // Not entering, no error
     if (engine->rpn_mode) {
-      prv_rpn_clear_x(engine);
+      if (engine->just_cleared) {
+        // AC: clear full stack
+        for (int i = 0; i < 4; i++) engine->stack[i] = 0.0;
+        prv_clear_entry(engine);
+      } else {
+        prv_rpn_clear_x(engine);
+        engine->just_cleared = true;
+      }
     } else if (resolved == CALC_ACTION_CLEAR) {
-      // Preserve sticky scientific state across CLEAR.
-      int   page = engine->page;
-      bool  deg  = engine->deg_mode;
-      double mem = engine->memory;
-      calc_engine_init(engine);
-      engine->page = page;
-      engine->deg_mode = deg;
-      engine->memory = mem;
+      int  page = engine->page;
+      bool deg  = engine->deg_mode;
+      if (engine->just_cleared) {
+        // AC: clear everything including memory
+        calc_engine_init(engine);
+        engine->page = page;
+        engine->deg_mode = deg;
+      } else {
+        // C: preserve memory
+        double mem = engine->memory;
+        calc_engine_init(engine);
+        engine->page = page;
+        engine->deg_mode = deg;
+        engine->memory = mem;
+        engine->just_cleared = true;
+      }
     }
     goto done;
   }

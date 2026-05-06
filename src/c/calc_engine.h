@@ -159,6 +159,9 @@ typedef struct {
 
   // Error state
   bool error;
+
+  // Set after C is pressed while not entering; causes next C press to be AC
+  bool just_cleared;
 } CalcEngine;
 
 // Initialize the calculator engine
