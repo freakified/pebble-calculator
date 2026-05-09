@@ -1,9 +1,9 @@
-#include <pebble.h>
-#include "calc_engine.h"
 #include "calc_buttons.h"
-#include "calc_ui.h"
+#include "calc_engine.h"
 #include "calc_fonts.h"
 #include "calc_settings.h"
+#include "calc_ui.h"
+#include <pebble.h>
 
 // ---------------------------------------------------------------------------
 // Static state
@@ -14,11 +14,9 @@ static Layer *s_ui_layer;
 static CalcEngine s_engine;
 static int s_pressed_button = -1;
 
-static const uint32_t s_vibe_durations[] = {50};
-static const VibePattern s_vibe_pattern = {
-  .durations = s_vibe_durations,
-  .num_segments = 1
-};
+static const uint32_t s_vibe_durations[] = {10};
+static const VibePattern s_vibe_pattern = {.durations = s_vibe_durations,
+                                           .num_segments = 1};
 
 // ---------------------------------------------------------------------------
 // Touch handling
@@ -26,47 +24,47 @@ static const VibePattern s_vibe_pattern = {
 
 static void prv_touch_handler(const TouchEvent *event, void *context) {
   switch (event->type) {
-    case TouchEvent_Touchdown: {
-      int idx = calc_buttons_hit_test(s_engine.page, GPoint(event->x, event->y),
-                                      s_engine.rpn_mode);
-      if (idx >= 0) {
-        s_pressed_button = idx;
-        calc_ui_set_pressed(idx);
-        if (calc_settings_haptic_enabled()) {
-          vibes_enqueue_custom_pattern(s_vibe_pattern);
-        }
-        calc_ui_mark_dirty();
+  case TouchEvent_Touchdown: {
+    int idx = calc_buttons_hit_test(s_engine.page, GPoint(event->x, event->y),
+                                    s_engine.rpn_mode);
+    if (idx >= 0) {
+      s_pressed_button = idx;
+      calc_ui_set_pressed(idx);
+      if (calc_settings_haptic_enabled()) {
+        vibes_enqueue_custom_pattern(s_vibe_pattern);
       }
-      break;
+      calc_ui_mark_dirty();
     }
+    break;
+  }
 
-    case TouchEvent_PositionUpdate: {
-      if (s_pressed_button >= 0) {
-        const CalcButton *btn = calc_buttons_get(s_engine.page, s_pressed_button);
-        GPoint p = GPoint(event->x, event->y);
-        if (btn && !grect_contains_point(&btn->bounds, &p)) {
-          s_pressed_button = -1;
-          calc_ui_set_pressed(-1);
-          calc_ui_mark_dirty();
-        }
-      }
-      break;
-    }
-
-    case TouchEvent_Liftoff: {
-      if (s_pressed_button >= 0) {
-        const CalcButton *btn = calc_buttons_get(s_engine.page, s_pressed_button);
-        if (btn) {
-          CalcAction action = calc_button_get_action(btn, s_engine.rpn_mode);
-          // The engine resolves the 2nd-modifier itself, so dispatch raw.
-          calc_engine_handle_action(&s_engine, action);
-        }
+  case TouchEvent_PositionUpdate: {
+    if (s_pressed_button >= 0) {
+      const CalcButton *btn = calc_buttons_get(s_engine.page, s_pressed_button);
+      GPoint p = GPoint(event->x, event->y);
+      if (btn && !grect_contains_point(&btn->bounds, &p)) {
         s_pressed_button = -1;
         calc_ui_set_pressed(-1);
         calc_ui_mark_dirty();
       }
-      break;
     }
+    break;
+  }
+
+  case TouchEvent_Liftoff: {
+    if (s_pressed_button >= 0) {
+      const CalcButton *btn = calc_buttons_get(s_engine.page, s_pressed_button);
+      if (btn) {
+        CalcAction action = calc_button_get_action(btn, s_engine.rpn_mode);
+        // The engine resolves the 2nd-modifier itself, so dispatch raw.
+        calc_engine_handle_action(&s_engine, action);
+      }
+      s_pressed_button = -1;
+      calc_ui_set_pressed(-1);
+      calc_ui_mark_dirty();
+    }
+    break;
+  }
   }
 }
 
@@ -74,7 +72,8 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
 // Physical button handlers (shortcuts)
 // ---------------------------------------------------------------------------
 
-// SELECT cycles through pages — the on-screen ± has moved to the scientific page.
+// SELECT cycles through pages — the on-screen ± has moved to the scientific
+// page.
 static void prv_select_click(ClickRecognizerRef recognizer, void *context) {
   calc_engine_handle_action(&s_engine, CALC_ACTION_PAGE_NEXT);
   calc_ui_mark_dirty();
@@ -149,16 +148,14 @@ static void prv_init(void) {
   s_window = window_create();
   window_set_background_color(s_window, GColorWhite);
   window_set_click_config_provider(s_window, prv_click_config_provider);
-  window_set_window_handlers(s_window, (WindowHandlers) {
-    .load = prv_window_load,
-    .unload = prv_window_unload,
-  });
+  window_set_window_handlers(s_window, (WindowHandlers){
+                                           .load = prv_window_load,
+                                           .unload = prv_window_unload,
+                                       });
   window_stack_push(s_window, true);
 }
 
-static void prv_deinit(void) {
-  window_destroy(s_window);
-}
+static void prv_deinit(void) { window_destroy(s_window); }
 
 int main(void) {
   prv_init();
