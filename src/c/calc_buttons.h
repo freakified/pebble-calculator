@@ -29,8 +29,7 @@ typedef struct {
 
 // Layout grid (5 rows x 4 cols on Emery 200x228).
 // Row 0: [DEL][          display          ]
-// Rows 1-4: number/operator buttons. Bottom 3px of the screen are slack
-// and absorbed into row 4 by the hit test.
+// Rows 1-4: number/operator buttons.
 #define CALC_GRID_ROWS 5
 #define CALC_GRID_COLS 4
 #define CALC_CELL_W 50              // 200 / 4
@@ -38,13 +37,15 @@ typedef struct {
 #define CALC_GRID_OFFSET_Y 3        // pushes grid down so the 3px gap is at the top
 #define CALC_DISPLAY_HEIGHT CALC_CELL_H
 
-// Number of buttons per page (16 grid slots + 1 C/CLR slot).
-#define CALC_BUTTON_COUNT 17
+// Number of buttons per page (16 grid slots + 1 C/CLR slot + 1 platform
+// extension slot). The extension slot is only active on round basic layouts.
+#define CALC_BUTTON_COUNT 18
 
 // Index of the C / clear-X button (lives in grid cell (0, 0)).
 // Fires CLEAR in standard mode; in RPN mode acts as backspace while typing
 // or clear-X (CLx) when no entry is in progress.
 #define CALC_BUTTON_INDEX_CL 16
+#define CALC_BUTTON_INDEX_EXTRA 17
 
 // Initialize button layout (call once)
 void calc_buttons_init(void);
@@ -54,6 +55,16 @@ const CalcButton *calc_buttons_get(int page, int index);
 
 // Get total number of button slots per page.
 int calc_buttons_get_count(void);
+
+// Get the display text rect for the current platform.
+GRect calc_buttons_get_display_rect(GRect screen_bounds);
+
+// Get the height of the display band background for the current platform.
+int calc_buttons_get_display_band_height(void);
+
+// Get the inset visual rect for a button. The button's bounds remain the
+// larger logical hit target.
+GRect calc_buttons_get_button_draw_rect(const CalcButton *btn);
 
 // Hit-test: returns button index at the given point on the given page (and
 // for the current mode), or -1 if none. Mode-awareness lets us hide buttons

@@ -12,15 +12,10 @@
 #define DISPLAY_PAD_X 6
 #define DISPLAY_PAD_Y 2
 
-// Page-indicator dot geometry — drawn in the display row, top-left of the
+// Page-indicator dot geometry — drawn in the display rect, top-left of the
 // text region, so it doesn't fight the right-aligned secondary text.
 #define PAGE_DOT_RADIUS 2
 #define PAGE_DOT_SPACING 7
-#define PAGE_DOT_X_BASE (CALC_CELL_W + 4)
-#define PAGE_DOT_Y (CALC_GRID_OFFSET_Y + 6)
-
-// Chip (DEG/RAD/2nd) geometry — small text directly below the page dots.
-#define CHIP_Y (CALC_GRID_OFFSET_Y + 12)
 
 // Colors
 #define COLOR_BG GColorBlack
@@ -152,16 +147,19 @@ static void prv_get_button_colors(const CalcButton *btn, bool pressed,
   }
 }
 
-static void prv_draw_page_indicator(GContext *ctx, int active_page) {
+static void prv_draw_page_indicator(GContext *ctx, GRect display_rect,
+                                    int active_page) {
+  const int x_base = display_rect.origin.x + 4;
+  const int y = display_rect.origin.y + 8;
   for (int i = 0; i < CALC_PAGE_COUNT; i++) {
     GColor c = (i == active_page) ? COLOR_DOT_ACTIVE : COLOR_DOT_INACTIVE;
     graphics_context_set_fill_color(ctx, c);
-    int x = PAGE_DOT_X_BASE + i * PAGE_DOT_SPACING;
-    graphics_fill_circle(ctx, GPoint(x, PAGE_DOT_Y), PAGE_DOT_RADIUS);
+    int x = x_base + i * PAGE_DOT_SPACING;
+    graphics_fill_circle(ctx, GPoint(x, y), PAGE_DOT_RADIUS);
   }
 }
 
-static void prv_draw_chips(GContext *ctx) {
+static void prv_draw_chips(GContext *ctx, GRect display_rect) {
   if (!s_engine) return;
   const CalcFonts *fonts = calc_fonts_get();
 
@@ -186,7 +184,8 @@ static void prv_draw_chips(GContext *ctx) {
 
   graphics_context_set_text_color(ctx, COLOR_DISPLAY_SEC);
   graphics_draw_text(ctx, buf, fonts->indicator,
-                     GRect(PAGE_DOT_X_BASE - 2, CHIP_Y, 60, 18),
+                     GRect(display_rect.origin.x + 2, display_rect.origin.y + 14,
+                           60, 18),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 }
 
@@ -194,21 +193,22 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
   if (!s_engine)
     return;
 
-  // White display bg spans the full row 0 width plus the 3px top gap; DEL is
-  // drawn over it in cell (0, 0). Text occupies cols 1-3 only, right-aligned.
+  // White display bg spans the full top band; top-band buttons are drawn over
+  // it. Text occupies the layout-provided display rect, right-aligned.
   graphics_context_set_fill_color(ctx, COLOR_DISPLAY_BG);
   graphics_fill_rect(
-      ctx, GRect(0, 0, bounds.size.w, CALC_DISPLAY_HEIGHT + CALC_GRID_OFFSET_Y),
-      0, GCornerNone);
+      ctx, GRect(0, 0, bounds.size.w, calc_buttons_get_display_band_height()), 0,
+      GCornerNone);
 
   const CalcFonts *fonts = calc_fonts_get();
 
-  const int text_left = CALC_CELL_W;
-  const int text_w = bounds.size.w - text_left - DISPLAY_PAD_X + 6;
+  GRect display_rect = calc_buttons_get_display_rect(bounds);
+  const int text_left = display_rect.origin.x;
+  const int text_w = display_rect.size.w - DISPLAY_PAD_X;
 
   // Page dots and chips occupy the left side of the display row.
-  prv_draw_page_indicator(ctx, s_engine->page);
-  prv_draw_chips(ctx);
+  prv_draw_page_indicator(ctx, display_rect, s_engine->page);
+  prv_draw_chips(ctx, display_rect);
 
   // Secondary line: Y register (RPN) or pending operand + operator (standard).
   // Skipped while typing — the X register's primary line conveys the entry.
@@ -227,7 +227,7 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
 
   graphics_context_set_text_color(ctx, COLOR_DISPLAY_SEC);
   graphics_draw_text(ctx, sec_buf, fonts->indicator,
-                     GRect(sec_x, CALC_GRID_OFFSET_Y - 2, sec_w, 18),
+                     GRect(sec_x, display_rect.origin.y + 1, sec_w, 18),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentRight,
                      NULL);
 
@@ -267,7 +267,8 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
   graphics_draw_text(
       ctx, x_display, x_font,
       GRect(text_left - (use_compact_font ? 2 : 0),
-            10 + CALC_GRID_OFFSET_Y + (use_compact_font ? 2 : 0), text_w, 32),
+            display_rect.origin.y + 13 + (use_compact_font ? 2 : 0), text_w,
+            32),
       GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
 }
 
@@ -296,21 +297,19 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
 
     // Fill button background
     graphics_context_set_fill_color(ctx, bg);
-    GRect btn_rect = btn->bounds;
-    // Inset slightly for grid gap effect
-    GRect fill_rect = grect_inset(btn_rect, GEdgeInsets(2));
+    GRect fill_rect = calc_buttons_get_button_draw_rect(btn);
     graphics_fill_rect(ctx, fill_rect, 8, GCornersAll);
 
     // C/DEL button: dynamic icon or label based on engine entry state.
-    if (i == 16) {
+    if (i == CALC_BUTTON_INDEX_CL) {
       if (s_engine->entering) {
         calc_icons_draw(ctx, CALC_ICON_BACKSPACE, fill_rect, text, bg);
       } else {
         const char *clabel = s_engine->just_cleared ? "AC" : "C";
-        int text_y = btn_rect.origin.y + (btn_rect.size.h - 24) / 2 - 6;
+        int text_y = fill_rect.origin.y + (fill_rect.size.h - 24) / 2 - 6;
         graphics_context_set_text_color(ctx, text);
         graphics_draw_text(ctx, clabel, fonts->button_label,
-            GRect(btn_rect.origin.x, text_y, btn_rect.size.w, 24),
+            GRect(fill_rect.origin.x, text_y, fill_rect.size.w, 24),
             GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
       }
       continue;
@@ -349,10 +348,10 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
     }
 
     // Center text in button
-    int text_y = btn_rect.origin.y + (btn_rect.size.h - text_h) / 2 + y_offset;
+    int text_y = fill_rect.origin.y + (fill_rect.size.h - text_h) / 2 + y_offset;
     graphics_draw_text(
         ctx, label, font,
-        GRect(btn_rect.origin.x, text_y, btn_rect.size.w, text_h),
+        GRect(fill_rect.origin.x, text_y, fill_rect.size.w, text_h),
         GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
   }
 }

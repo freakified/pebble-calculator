@@ -1,10 +1,35 @@
 #include "calc_buttons.h"
 
 // ---------------------------------------------------------------------------
-// Page button tables. Per-page entries are 17 buttons: indices 0-15 are the
-// 4×4 grid in row-major order (rows 1-4 of the screen), index 16 is the C/CLR
-// button in cell (0, 0).
+// Page button tables. Per-page entries are 18 buttons: indices 0-15 are the
+// 4×4 grid in row-major order on rectangular screens, index 16 is the C/CLR
+// button, and index 17 is a platform extension slot used by the round basic ±
+// key.
 // ---------------------------------------------------------------------------
+
+#if defined(PBL_ROUND)
+#define CALC_ROUND_LAYOUT 1
+#else
+#define CALC_ROUND_LAYOUT 0
+#endif
+
+#if CALC_ROUND_LAYOUT
+#define EXTRA_BASIC_STYLE BUTTON_STYLE_NUMBER
+#define EXTRA_BASIC_ACTION CALC_ACTION_NEGATE
+#define EXTRA_BASIC_LABEL "±"
+#else
+#define EXTRA_BASIC_STYLE BUTTON_STYLE_NONE
+#define EXTRA_BASIC_ACTION CALC_ACTION_NOOP
+#define EXTRA_BASIC_LABEL ""
+#endif
+
+#define ROUND_TOP_H 64
+#define ROUND_DISPLAY_Y 16
+#define ROUND_CELL_W CALC_CELL_W
+#define ROUND_CELL_H CALC_CELL_H
+#define ROUND_LEFT_RAIL_X 5
+#define ROUND_CENTER_X 55
+#define ROUND_RIGHT_RAIL_X 205
 
 static CalcButton s_buttons[CALC_PAGE_COUNT][CALC_BUTTON_COUNT] = {
 
@@ -34,6 +59,8 @@ static CalcButton s_buttons[CALC_PAGE_COUNT][CALC_BUTTON_COUNT] = {
     { .label = "", .action = CALC_ACTION_ADD, .rpn_action = CALC_ACTION_ADD, .style = BUTTON_STYLE_OPERATOR, .icon = CALC_ICON_PLUS },
     // [16] C/DEL
     { .label = "C", .action = CALC_ACTION_CLEAR, .rpn_action = CALC_ACTION_CLEAR, .style = BUTTON_STYLE_CLEAR, .icon = CALC_ICON_NONE },
+    // [17] round-only top-right ±
+    { .label = EXTRA_BASIC_LABEL, .action = EXTRA_BASIC_ACTION, .rpn_action = EXTRA_BASIC_ACTION, .style = EXTRA_BASIC_STYLE, .icon = CALC_ICON_NONE },
   },
 
   // ===========================================================================
@@ -63,6 +90,8 @@ static CalcButton s_buttons[CALC_PAGE_COUNT][CALC_BUTTON_COUNT] = {
     { .label = "", .action = CALC_ACTION_NOOP, .rpn_action = CALC_ACTION_NOOP, .style = BUTTON_STYLE_NONE },
     // [16] C/DEL
     { .label = "C", .action = CALC_ACTION_CLEAR, .rpn_action = CALC_ACTION_CLEAR, .style = BUTTON_STYLE_CLEAR, .icon = CALC_ICON_NONE },
+    // [17] unused
+    { .label = "", .action = CALC_ACTION_NOOP, .rpn_action = CALC_ACTION_NOOP, .style = BUTTON_STYLE_NONE },
   },
 
   // ===========================================================================
@@ -92,6 +121,8 @@ static CalcButton s_buttons[CALC_PAGE_COUNT][CALC_BUTTON_COUNT] = {
     { .label = "", .action = CALC_ACTION_NOOP, .rpn_action = CALC_ACTION_NOOP, .style = BUTTON_STYLE_NONE },
     // [16] C/DEL
     { .label = "C", .action = CALC_ACTION_CLEAR, .rpn_action = CALC_ACTION_CLEAR, .style = BUTTON_STYLE_CLEAR, .icon = CALC_ICON_NONE },
+    // [17] unused
+    { .label = "", .action = CALC_ACTION_NOOP, .rpn_action = CALC_ACTION_NOOP, .style = BUTTON_STYLE_NONE },
   },
 };
 
@@ -99,22 +130,107 @@ static CalcButton s_buttons[CALC_PAGE_COUNT][CALC_BUTTON_COUNT] = {
 // Same layout for every page (the C button is always cell (0, 0) and rows
 // 1-4 cover indices 0-15 row-major). Mode-awareness for empty slots is
 // applied via NOOP-action checks in hit_test below.
-static const int s_grid_cell_to_button[CALC_GRID_ROWS][CALC_GRID_COLS] = {
+#if !CALC_ROUND_LAYOUT
+static const int s_rect_cell_to_button[CALC_GRID_ROWS][CALC_GRID_COLS] = {
     {CALC_BUTTON_INDEX_CL, -1, -1, -1}, // C/CLR + display cells
     {0, 1, 2, 3},                       // grid row 1
     {4, 5, 6, 7},                       // grid row 2
     {8, 9, 10, 11},                     // grid row 3
     {12, 13, 14, 15},                   // grid row 4
 };
+#endif
+
+#if CALC_ROUND_LAYOUT
+static GRect prv_round_cell(int x, int row) {
+  return GRect(x, ROUND_TOP_H + row * ROUND_CELL_H, ROUND_CELL_W,
+               ROUND_CELL_H);
+}
+
+static GRect prv_round_basic_cell(int col, int row) {
+  return prv_round_cell(ROUND_CENTER_X + col * ROUND_CELL_W, row);
+}
+
+static GRect prv_round_left_rail_cell(int row) {
+  return prv_round_cell(ROUND_LEFT_RAIL_X, row);
+}
+
+static GRect prv_round_right_rail_cell(int row) {
+  return prv_round_cell(ROUND_RIGHT_RAIL_X, row);
+}
+
+static GRect prv_round_five_slot_cell(int col, int row) {
+  if (col <= 0) return prv_round_left_rail_cell(row);
+  if (col >= 4) return prv_round_right_rail_cell(row);
+  return prv_round_basic_cell(col - 1, row);
+}
+
+static void prv_set_bounds(int page, int index, GRect bounds) {
+  s_buttons[page][index].bounds = bounds;
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // Initialization — compute button rects (same bounds across all pages)
 // ---------------------------------------------------------------------------
 
 void calc_buttons_init(void) {
+#if CALC_ROUND_LAYOUT
+  for (int p = 0; p < CALC_PAGE_COUNT; p++) {
+    for (int i = 0; i < CALC_BUTTON_COUNT; i++) {
+      s_buttons[p][i].bounds = GRect(0, 0, 0, 0);
+    }
+    s_buttons[p][CALC_BUTTON_INDEX_CL].bounds = GRect(0, 0, 0, 0);
+  }
+
+  // Basic page: display-only top band, then 3-column number pad with
+  // left/right rails.
+  s_buttons[CALC_PAGE_BASIC][CALC_BUTTON_INDEX_CL].bounds =
+      prv_round_left_rail_cell(0);
+  prv_set_bounds(CALC_PAGE_BASIC, 0, prv_round_basic_cell(0, 0)); // 7
+  prv_set_bounds(CALC_PAGE_BASIC, 1, prv_round_basic_cell(1, 0)); // 8
+  prv_set_bounds(CALC_PAGE_BASIC, 2, prv_round_basic_cell(2, 0)); // 9
+  prv_set_bounds(CALC_PAGE_BASIC, CALC_BUTTON_INDEX_EXTRA,
+                 prv_round_right_rail_cell(0)); // ±
+
+  prv_set_bounds(CALC_PAGE_BASIC, 3, prv_round_left_rail_cell(1)); // ÷
+  prv_set_bounds(CALC_PAGE_BASIC, 4, prv_round_basic_cell(0, 1)); // 4
+  prv_set_bounds(CALC_PAGE_BASIC, 5, prv_round_basic_cell(1, 1)); // 5
+  prv_set_bounds(CALC_PAGE_BASIC, 6, prv_round_basic_cell(2, 1)); // 6
+  prv_set_bounds(CALC_PAGE_BASIC, 11, prv_round_right_rail_cell(1)); // −
+
+  prv_set_bounds(CALC_PAGE_BASIC, 7, prv_round_left_rail_cell(2)); // ×
+  prv_set_bounds(CALC_PAGE_BASIC, 8, prv_round_basic_cell(0, 2)); // 1
+  prv_set_bounds(CALC_PAGE_BASIC, 9, prv_round_basic_cell(1, 2)); // 2
+  prv_set_bounds(CALC_PAGE_BASIC, 10, prv_round_basic_cell(2, 2)); // 3
+  prv_set_bounds(CALC_PAGE_BASIC, 15, prv_round_right_rail_cell(2)); // +
+
+  prv_set_bounds(CALC_PAGE_BASIC, 12, prv_round_basic_cell(0, 3)); // 0
+  prv_set_bounds(CALC_PAGE_BASIC, 13, prv_round_basic_cell(1, 3)); // .
+  prv_set_bounds(CALC_PAGE_BASIC, 14, prv_round_basic_cell(2, 3)); // =
+
+  // Scientific page: keep the existing row-major order in the same five-slot
+  // round rows, with C in the left rail.
+  s_buttons[CALC_PAGE_SCI][CALC_BUTTON_INDEX_CL].bounds =
+      prv_round_left_rail_cell(0);
+  for (int i = 0; i < 16; i++) {
+    int row = i / 4;
+    int col = i % 4;
+    prv_set_bounds(CALC_PAGE_SCI, i, prv_round_five_slot_cell(col + 1, row));
+  }
+
+  // Memory/RPN page: preserve the row-major page table in a round-safe,
+  // five-slot grid.
+  s_buttons[CALC_PAGE_MEM][CALC_BUTTON_INDEX_CL].bounds =
+      prv_round_left_rail_cell(0);
+  for (int i = 0; i < 16; i++) {
+    int row = i / 4;
+    int col = i % 4;
+    prv_set_bounds(CALC_PAGE_MEM, i, prv_round_five_slot_cell(col + 1, row));
+  }
+#else
   for (int row = 0; row < CALC_GRID_ROWS; row++) {
     for (int col = 0; col < CALC_GRID_COLS; col++) {
-      int idx = s_grid_cell_to_button[row][col];
+      int idx = s_rect_cell_to_button[row][col];
       if (idx < 0) continue; // display cell
       GRect bounds = GRect(col * CALC_CELL_W, row * CALC_CELL_H + CALC_GRID_OFFSET_Y,
                            CALC_CELL_W, CALC_CELL_H);
@@ -123,6 +239,10 @@ void calc_buttons_init(void) {
       }
     }
   }
+  for (int p = 0; p < CALC_PAGE_COUNT; p++) {
+    s_buttons[p][CALC_BUTTON_INDEX_EXTRA].bounds = GRect(0, 0, 0, 0);
+  }
+#endif
 }
 
 const CalcButton *calc_buttons_get(int page, int index) {
@@ -133,21 +253,39 @@ const CalcButton *calc_buttons_get(int page, int index) {
 
 int calc_buttons_get_count(void) { return CALC_BUTTON_COUNT; }
 
+GRect calc_buttons_get_display_rect(GRect screen_bounds) {
+#if CALC_ROUND_LAYOUT
+  return GRect(58, ROUND_DISPLAY_Y, screen_bounds.size.w - 116,
+               ROUND_TOP_H - ROUND_DISPLAY_Y);
+#else
+  return GRect(CALC_CELL_W, 0, screen_bounds.size.w - CALC_CELL_W,
+               CALC_DISPLAY_HEIGHT + CALC_GRID_OFFSET_Y);
+#endif
+}
+
+int calc_buttons_get_display_band_height(void) {
+#if CALC_ROUND_LAYOUT
+  return ROUND_TOP_H;
+#else
+  return CALC_DISPLAY_HEIGHT + CALC_GRID_OFFSET_Y;
+#endif
+}
+
+GRect calc_buttons_get_button_draw_rect(const CalcButton *btn) {
+  if (!btn) return GRect(0, 0, 0, 0);
+  return grect_inset(btn->bounds, GEdgeInsets(2));
+}
+
 int calc_buttons_hit_test(int page, GPoint point, bool rpn_mode) {
   if (page < 0 || page >= CALC_PAGE_COUNT) return -1;
-  if (point.x < 0 || point.y < CALC_GRID_OFFSET_Y) return -1;
-  int adj_y = point.y - CALC_GRID_OFFSET_Y;
-  int col = point.x / CALC_CELL_W;
-  int row = adj_y / CALC_CELL_H;
-  if (col >= CALC_GRID_COLS) col = CALC_GRID_COLS - 1;
-  if (row >= CALC_GRID_ROWS) row = CALC_GRID_ROWS - 1;
-  int idx = s_grid_cell_to_button[row][col];
-  if (idx < 0) return -1;
-  // Mode-aware hide: if the action resolves to NOOP for this mode, the cell
-  // is empty here (e.g., RPN-only stack ops in standard mode).
-  CalcAction action = calc_button_get_action(&s_buttons[page][idx], rpn_mode);
-  if (action == CALC_ACTION_NOOP) return -1;
-  return idx;
+  for (int idx = 0; idx < CALC_BUTTON_COUNT; idx++) {
+    CalcButton *btn = &s_buttons[page][idx];
+    if (btn->style == BUTTON_STYLE_NONE) continue;
+    CalcAction action = calc_button_get_action(btn, rpn_mode);
+    if (action == CALC_ACTION_NOOP) continue;
+    if (grect_contains_point(&btn->bounds, &point)) return idx;
+  }
+  return -1;
 }
 
 const char *calc_button_get_label(const CalcButton *btn, bool rpn_mode, bool second_active) {
