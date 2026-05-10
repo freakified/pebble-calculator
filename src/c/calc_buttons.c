@@ -148,12 +148,19 @@ static CalcButtonInfo s_buttons[CALC_BUTTON_COUNT] = {
         .icon = CALC_ICON_PLUS,
     },
 
-    // C button (index 16) — placed in grid cell (0, 0) by calc_buttons_init.
+    [CALC_BUTTON_CLEAR_ALL] = {
+        .row = 0,
+        .col = 0,
+        .label = "C",
+        .action = CALC_ACTION_CLEAR_ALL,
+        .style = BUTTON_STYLE_CLEAR,
+        .icon = CALC_ICON_NONE,
+    },
     [CALC_BUTTON_BACKSPACE] = {
         .row = 0,
         .col = 0,
         .label = "",
-        .action = CALC_ACTION_CLEAR,
+        .action = CALC_ACTION_BACKSPACE,
         .style = BUTTON_STYLE_CLEAR,
         .icon = CALC_ICON_BACKSPACE,
     },

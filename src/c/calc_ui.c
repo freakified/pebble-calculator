@@ -44,11 +44,22 @@ static int s_pressed_index = -1;
 
 static bool prv_button_visible(CalcButton idx) {
   if (!s_engine) return false;
+
   switch (idx) {
   case CALC_BUTTON_EQUALS:
     return !s_engine->rpn_mode;
+
   case CALC_BUTTON_ENTER:
     return s_engine->rpn_mode;
+
+  case CALC_BUTTON_CLEAR_ALL:
+  case CALC_BUTTON_BACKSPACE:
+    if (s_engine->entry[0] != '0' || s_engine->entry[1] != '\0')
+      return (idx == CALC_BUTTON_BACKSPACE);
+    if (!s_engine->rpn_mode && s_engine->pending_op != CALC_OP_NONE)
+      return (idx == CALC_BUTTON_CLEAR_ALL);
+    return false;
+
   default:
     return true;
   }

@@ -272,6 +272,17 @@ static void prv_rpn_clear_x(CalcEngine *e) {
   e->stack_lift_enabled = false;
 }
 
+static bool prv_clear_error(CalcEngine *e) {
+  if (!e->error) return false;
+  if (e->rpn_mode) {
+    e->error = false;
+    prv_rpn_clear_x(e);
+  } else {
+    calc_engine_init(e);
+  }
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -289,15 +300,39 @@ void calc_engine_set_rpn_mode(CalcEngine *engine, bool rpn) {
 }
 
 void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
+  // Clear all (or clear-X if RPN)
+  if (action == CALC_ACTION_CLEAR_ALL) {
+    if (prv_clear_error(engine)) {
+      return;
+    }
+
+    if (engine->rpn_mode) {
+      prv_rpn_clear_x(engine);
+      return;
+    }
+
+    calc_engine_init(engine);
+    return;
+  }
+
+  // Clear entry (or clear-X if RPN)
+  if (action == CALC_ACTION_CLEAR_ENTRY) {
+    if (prv_clear_error(engine)) {
+      return;
+    }
+
+    if (engine->rpn_mode) {
+      prv_rpn_clear_x(engine);
+      return;
+    }
+
+    prv_clear_entry(engine);
+    return;
+  }
+
   // Backspace / Clear
-  if (action == CALC_ACTION_BACKSPACE || action == CALC_ACTION_CLEAR) {
-    if (engine->error) {
-      if (engine->rpn_mode) {
-        engine->error = false;
-        prv_rpn_clear_x(engine);
-      } else {
-        calc_engine_init(engine);
-      }
+  if (action == CALC_ACTION_BACKSPACE) {
+    if (prv_clear_error(engine)) {
       return;
     }
 
@@ -326,8 +361,8 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
     // Not entering, no error
     if (engine->rpn_mode) {
       prv_rpn_clear_x(engine);
-    } else if (action == CALC_ACTION_CLEAR) {
-      calc_engine_init(engine);
+    } else {
+      prv_clear_entry(engine);
     }
     return;
   }
