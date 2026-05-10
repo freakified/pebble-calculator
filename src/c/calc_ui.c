@@ -185,7 +185,6 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
 
 static void prv_draw_buttons(GContext *ctx, GRect bounds) {
   int count = calc_buttons_get_count();
-  bool rpn = s_engine ? s_engine->rpn_mode : false;
 
   const CalcFonts *fonts = calc_fonts_get();
 
