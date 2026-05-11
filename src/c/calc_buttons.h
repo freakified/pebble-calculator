@@ -14,14 +14,15 @@ typedef enum {
 
 // A single button definition
 typedef struct {
-  const int row;             // Row (0 = top)
-  const int col;             // Column (0 = left)
-  bool visible;              // Whether the button should be drawn
-  GRect bounds;              // Pixel rect on screen
-  const char *label;         // Label for standard mode (ignored if icon != NONE)
-  CalcAction action;         // What action this button triggers
-  CalcButtonStyle style;     // Visual style
-  CalcIcon icon;             // If set, drawn instead of label
+  const int row;                 // Row (0 = top)
+  const int col;                 // Column (0 = left)
+  bool visible;                  // Whether the button should be drawn
+  GRect bounds;                  // Pixel rect on screen
+  const char *label;             // Label for standard mode (ignored if icon != NONE)
+  CalcAction action;             // What action this button triggers
+  CalcAction long_press_action;  // What action this button triggers when long-pressed
+  CalcButtonStyle style;         // Visual style
+  CalcIcon icon;                 // If set, drawn instead of label
 } CalcButtonInfo;
 
 // Layout grid (5 rows x 4 cols on Emery 200x228).

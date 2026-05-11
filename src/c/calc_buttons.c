@@ -21,6 +21,7 @@ static CalcButtonInfo s_buttons[CALC_BUTTON_COUNT] = {
         .col = 0,
         .label = "7",
         .action = CALC_ACTION_DIGIT_7,
+        .long_press_action = CALC_ACTION_NONE,
         .style = BUTTON_STYLE_NUMBER,
     },
     [CALC_BUTTON_DIGIT_8] = {
@@ -28,6 +29,7 @@ static CalcButtonInfo s_buttons[CALC_BUTTON_COUNT] = {
         .col = 1,
         .label = "8",
         .action = CALC_ACTION_DIGIT_8,
+        .long_press_action = CALC_ACTION_NONE,
         .style = BUTTON_STYLE_NUMBER,
     },
     [CALC_BUTTON_DIGIT_9] = {
@@ -35,6 +37,7 @@ static CalcButtonInfo s_buttons[CALC_BUTTON_COUNT] = {
         .col = 2,
         .label = "9",
         .action = CALC_ACTION_DIGIT_9,
+        .long_press_action = CALC_ACTION_NONE,
         .style = BUTTON_STYLE_NUMBER,
     },
     [CALC_BUTTON_DIVIDE] = {
@@ -42,6 +45,7 @@ static CalcButtonInfo s_buttons[CALC_BUTTON_COUNT] = {
         .col = 3,
         .label = "",
         .action = CALC_ACTION_DIVIDE,
+        .long_press_action = CALC_ACTION_NONE,
         .style = BUTTON_STYLE_OPERATOR,
         .icon = CALC_ICON_DIVIDE,
     },
@@ -52,6 +56,7 @@ static CalcButtonInfo s_buttons[CALC_BUTTON_COUNT] = {
         .col = 0,
         .label = "4",
         .action = CALC_ACTION_DIGIT_4,
+        .long_press_action = CALC_ACTION_NONE,
         .style = BUTTON_STYLE_NUMBER,
     },
     [CALC_BUTTON_DIGIT_5] = {
@@ -59,6 +64,7 @@ static CalcButtonInfo s_buttons[CALC_BUTTON_COUNT] = {
         .col = 1,
         .label = "5",
         .action = CALC_ACTION_DIGIT_5,
+        .long_press_action = CALC_ACTION_NONE,
         .style = BUTTON_STYLE_NUMBER,
     },
     [CALC_BUTTON_DIGIT_6] = {
@@ -66,6 +72,7 @@ static CalcButtonInfo s_buttons[CALC_BUTTON_COUNT] = {
         .col = 2,
         .label = "6",
         .action = CALC_ACTION_DIGIT_6,
+        .long_press_action = CALC_ACTION_NONE,
         .style = BUTTON_STYLE_NUMBER,
     },
     [CALC_BUTTON_MULTIPLY] = {
@@ -73,6 +80,7 @@ static CalcButtonInfo s_buttons[CALC_BUTTON_COUNT] = {
         .col = 3,
         .label = "",
         .action = CALC_ACTION_MULTIPLY,
+        .long_press_action = CALC_ACTION_NONE,
         .style = BUTTON_STYLE_OPERATOR,
         .icon = CALC_ICON_MULTIPLY,
     },
@@ -83,6 +91,7 @@ static CalcButtonInfo s_buttons[CALC_BUTTON_COUNT] = {
         .col = 0,
         .label = "1",
         .action = CALC_ACTION_DIGIT_1,
+        .long_press_action = CALC_ACTION_NONE,
         .style = BUTTON_STYLE_NUMBER,
     },
     [CALC_BUTTON_DIGIT_2] = {
@@ -90,6 +99,7 @@ static CalcButtonInfo s_buttons[CALC_BUTTON_COUNT] = {
         .col = 1,
         .label = "2",
         .action = CALC_ACTION_DIGIT_2,
+        .long_press_action = CALC_ACTION_NONE,
         .style = BUTTON_STYLE_NUMBER,
     },
     [CALC_BUTTON_DIGIT_3] = {
@@ -97,6 +107,7 @@ static CalcButtonInfo s_buttons[CALC_BUTTON_COUNT] = {
         .col = 2,
         .label = "3",
         .action = CALC_ACTION_DIGIT_3,
+        .long_press_action = CALC_ACTION_NONE,
         .style = BUTTON_STYLE_NUMBER,
     },
     [CALC_BUTTON_SUBTRACT] = {
@@ -104,6 +115,7 @@ static CalcButtonInfo s_buttons[CALC_BUTTON_COUNT] = {
         .col = 3,
         .label = "",
         .action = CALC_ACTION_SUBTRACT,
+        .long_press_action = CALC_ACTION_NONE,
         .style = BUTTON_STYLE_OPERATOR,
         .icon = CALC_ICON_MINUS,
     },
@@ -114,6 +126,7 @@ static CalcButtonInfo s_buttons[CALC_BUTTON_COUNT] = {
         .col = 0,
         .label = "0",
         .action = CALC_ACTION_DIGIT_0,
+        .long_press_action = CALC_ACTION_NONE,
         .style = BUTTON_STYLE_NUMBER,
     },
     [CALC_BUTTON_DOT] = {
@@ -121,6 +134,7 @@ static CalcButtonInfo s_buttons[CALC_BUTTON_COUNT] = {
         .col = 1,
         .label = ".",
         .action = CALC_ACTION_DOT,
+        .long_press_action = CALC_ACTION_NONE,
         .style = BUTTON_STYLE_NUMBER,
     },
     [CALC_BUTTON_EQUALS] = {
@@ -136,6 +150,7 @@ static CalcButtonInfo s_buttons[CALC_BUTTON_COUNT] = {
         .col = 2,
         .label = "ENTER",
         .action = CALC_ACTION_ENTER,
+        .long_press_action = CALC_ACTION_NONE,
         .style = BUTTON_STYLE_ENTER,
         .icon = CALC_ICON_NONE,
     },
@@ -144,6 +159,7 @@ static CalcButtonInfo s_buttons[CALC_BUTTON_COUNT] = {
         .col = 3,
         .label = "",
         .action = CALC_ACTION_ADD,
+        .long_press_action = CALC_ACTION_NONE,
         .style = BUTTON_STYLE_OPERATOR,
         .icon = CALC_ICON_PLUS,
     },
@@ -153,6 +169,7 @@ static CalcButtonInfo s_buttons[CALC_BUTTON_COUNT] = {
         .col = 0,
         .label = "C",
         .action = CALC_ACTION_CLEAR_ALL,
+        .long_press_action = CALC_ACTION_NONE,
         .style = BUTTON_STYLE_CLEAR,
         .icon = CALC_ICON_NONE,
     },
@@ -161,6 +178,7 @@ static CalcButtonInfo s_buttons[CALC_BUTTON_COUNT] = {
         .col = 0,
         .label = "",
         .action = CALC_ACTION_BACKSPACE,
+        .long_press_action = CALC_ACTION_CLEAR_ENTRY,
         .style = BUTTON_STYLE_CLEAR,
         .icon = CALC_ICON_BACKSPACE,
     },
