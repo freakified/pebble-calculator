@@ -12,7 +12,8 @@
 
 // Actions that buttons can trigger
 typedef enum {
-  CALC_ACTION_DIGIT_0 = 0,
+  CALC_ACTION_NONE = 0,
+  CALC_ACTION_DIGIT_0,
   CALC_ACTION_DIGIT_1,
   CALC_ACTION_DIGIT_2,
   CALC_ACTION_DIGIT_3,
@@ -28,12 +29,13 @@ typedef enum {
   CALC_ACTION_MULTIPLY,
   CALC_ACTION_DIVIDE,
   CALC_ACTION_NEGATE,
-  CALC_ACTION_EQUALS,    // Standard mode: evaluate
-  CALC_ACTION_CLEAR,     // C (or clear-X in RPN mode)
-  CALC_ACTION_BACKSPACE, // Remove last char from current entry
+  CALC_ACTION_EQUALS,      // Standard mode: evaluate
+  CALC_ACTION_CLEAR_ALL,   // C  (or clear-X in RPN mode)
+  CALC_ACTION_CLEAR_ENTRY, // CE (or clear-X in RPN mode)
+  CALC_ACTION_BACKSPACE,   // Remove last char from current entry
   // RPN-specific
-  CALC_ACTION_ENTER,     // Push X onto stack
-  CALC_ACTION_SWAP,      // Swap X <-> Y
+  CALC_ACTION_ENTER,       // Push X onto stack
+  CALC_ACTION_SWAP,        // Swap X <-> Y
 } CalcAction;
 
 // Pending operator for standard mode

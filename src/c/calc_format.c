@@ -2,10 +2,6 @@
 #include <stdio.h>
 #include <string.h>
 
-static double prv_fabs(double x) {
-  return x < 0.0 ? -x : x;
-}
-
 double calc_format_parse(const char *str, int len) {
   double result = 0.0;
   bool negative = false;
