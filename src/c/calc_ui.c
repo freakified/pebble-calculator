@@ -39,6 +39,28 @@ static CalcEngine *s_engine = NULL;
 static int s_pressed_index = -1;
 
 // ---------------------------------------------------------------------------
+// Button visibilities
+// ---------------------------------------------------------------------------
+
+static bool prv_button_visible(CalcButton idx) {
+  if (!s_engine) return false;
+  switch (idx) {
+  case CALC_BUTTON_EQUALS:
+    return !s_engine->rpn_mode;
+  case CALC_BUTTON_ENTER:
+    return s_engine->rpn_mode;
+  default:
+    return true;
+  }
+}
+
+static void prv_update_button_visibilities() {
+  for (CalcButton idx = 0; idx < CALC_BUTTON_COUNT; idx++) {
+    calc_button_set_visible(idx, prv_button_visible(idx));
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Drawing helpers
 // ---------------------------------------------------------------------------
 
@@ -84,7 +106,7 @@ static const char *prv_shorten_repeating(const char *str, char *buf,
   return buf;
 }
 
-static void prv_get_button_colors(const CalcButton *btn, bool pressed,
+static void prv_get_button_colors(const CalcButtonInfo *btn, bool pressed,
                                   GColor *bg, GColor *text) {
   if (pressed) {
     *bg = GColorWhite;
@@ -189,8 +211,8 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
   const CalcFonts *fonts = calc_fonts_get();
 
   for (int i = 0; i < count; i++) {
-    const CalcButton *btn = calc_buttons_get(i);
-    if (!btn)
+    const CalcButtonInfo *btn = calc_buttons_get_info(i);
+    if (!btn || !btn->visible)
       continue;
 
     bool pressed = (i == s_pressed_index);
@@ -204,17 +226,15 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
     GRect fill_rect = grect_inset(btn_rect, GEdgeInsets(2));
     graphics_fill_rect(ctx, fill_rect, 8, GCornersAll);
 
-    // Icons take precedence over labels, except in RPN mode when an explicit
-    // rpn_label is set (e.g. ENTER overrides the = icon).
-    bool show_icon =
-        (btn->icon != CALC_ICON_NONE) && !(rpn && btn->rpn_label != NULL);
+    // Icons take precedence over labels.
+    bool show_icon = (btn->icon != CALC_ICON_NONE);
     if (show_icon) {
       calc_icons_draw(ctx, btn->icon, fill_rect, text, bg);
       continue;
     }
 
     // Draw label
-    const char *label = calc_button_get_label(btn, rpn);
+    const char *label = btn->label;
     graphics_context_set_text_color(ctx, text);
 
     GFont font;
@@ -249,6 +269,8 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
 // ---------------------------------------------------------------------------
 
 static void prv_update_proc(Layer *layer, GContext *ctx) {
+  prv_update_button_visibilities();
+
   GRect bounds = layer_get_bounds(layer);
 
   // Clear background

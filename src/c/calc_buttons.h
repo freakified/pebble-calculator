@@ -14,14 +14,15 @@ typedef enum {
 
 // A single button definition
 typedef struct {
+  const int row;             // Row (0 = top)
+  const int col;             // Column (0 = left)
+  bool visible;              // Whether the button should be drawn
   GRect bounds;              // Pixel rect on screen
   const char *label;         // Label for standard mode (ignored if icon != NONE)
-  const char *rpn_label;     // Label for RPN mode (NULL = same as label)
   CalcAction action;         // What action this button triggers
-  CalcAction rpn_action;     // Action in RPN mode (if different; use same action if equal)
   CalcButtonStyle style;     // Visual style
   CalcIcon icon;             // If set, drawn instead of label
-} CalcButton;
+} CalcButtonInfo;
 
 // Layout grid (5 rows x 4 cols on Emery 200x228).
 // Row 0: [DEL][          display          ]
@@ -33,29 +34,47 @@ typedef struct {
 #define CALC_CELL_H 45              // 5*45 = 225; 3px slack absorbed into row 0 top
 #define CALC_GRID_OFFSET_Y 3        // pushes grid down so the 3px gap is at the top
 #define CALC_DISPLAY_HEIGHT CALC_CELL_H
+#define CALC_MAX_BUTTONS_PER_GRID_CELL 4
 
-// Number of buttons (16 number/operator buttons + 1 C/CLx).
-#define CALC_BUTTON_COUNT 17
+typedef enum {
+  CALC_BUTTON_NONE = -1,
+  CALC_BUTTON_DIGIT_0,
+  CALC_BUTTON_DIGIT_1,
+  CALC_BUTTON_DIGIT_2,
+  CALC_BUTTON_DIGIT_3,
+  CALC_BUTTON_DIGIT_4,
+  CALC_BUTTON_DIGIT_5,
+  CALC_BUTTON_DIGIT_6,
+  CALC_BUTTON_DIGIT_7,
+  CALC_BUTTON_DIGIT_8,
+  CALC_BUTTON_DIGIT_9,
+  CALC_BUTTON_DOT,
+  CALC_BUTTON_ADD,
+  CALC_BUTTON_SUBTRACT,
+  CALC_BUTTON_MULTIPLY,
+  CALC_BUTTON_DIVIDE,
 
-// Index of the C / clear-X button (lives in grid cell (0, 0)).
-// Fires CLEAR in standard mode; in RPN mode acts as backspace while typing
-// or clear-X (CLx) when no entry is in progress.
-#define CALC_BUTTON_INDEX_CL 16
+  CALC_BUTTON_EQUALS,
+  CALC_BUTTON_ENTER,
+  CALC_BUTTON_BACKSPACE,
+
+  CALC_BUTTON_COUNT,
+} CalcButton;
 
 // Initialize button layout (call once)
 void calc_buttons_init(void);
 
-// Get the button at the given index
-const CalcButton *calc_buttons_get(int index);
+// Get the button info for the given index
+const CalcButtonInfo *calc_buttons_get_info(CalcButton btn);
+
+// Get the vislble button for the given grid position
+CalcButton calc_button_at_grid_position(int row, int col);
 
 // Get total number of buttons
 int calc_buttons_get_count(void);
 
-// Hit-test: returns button index at the given point, or -1 if none
-int calc_buttons_hit_test(GPoint point);
+// Hit-test: returns button id at the given point, or -1 if none
+CalcButton calc_buttons_hit_test(GPoint point);
 
-// Get the effective label for a button given the current mode
-const char *calc_button_get_label(const CalcButton *btn, bool rpn_mode);
-
-// Get the effective action for a button given the current mode
-CalcAction calc_button_get_action(const CalcButton *btn, bool rpn_mode);
+// Set whether a button should be visible
+void calc_button_set_visible(CalcButton idx, bool visible);

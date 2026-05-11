@@ -37,8 +37,8 @@ static const VibePattern s_vibe_pattern = {
 static void prv_touch_handler(const TouchEvent *event, void *context) {
   switch (event->type) {
     case TouchEvent_Touchdown: {
-      int idx = calc_buttons_hit_test(GPoint(event->x, event->y));
-      if (idx >= 0) {
+      CalcButton idx = calc_buttons_hit_test(GPoint(event->x, event->y));
+      if (idx != CALC_BUTTON_NONE) {
         s_pressed_button = idx;
         calc_ui_set_pressed(idx);
         if (s_haptic_feedback) {
@@ -51,7 +51,7 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
 
     case TouchEvent_PositionUpdate: {
       if (s_pressed_button >= 0) {
-        const CalcButton *btn = calc_buttons_get(s_pressed_button);
+        const CalcButtonInfo *btn = calc_buttons_get_info(s_pressed_button);
         GPoint p = GPoint(event->x, event->y);
         if (btn && !grect_contains_point(&btn->bounds, &p)) {
           s_pressed_button = -1;
@@ -64,10 +64,9 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
 
     case TouchEvent_Liftoff: {
       if (s_pressed_button >= 0) {
-        const CalcButton *btn = calc_buttons_get(s_pressed_button);
+        const CalcButtonInfo *btn = calc_buttons_get_info(s_pressed_button);
         if (btn) {
-          CalcAction action = calc_button_get_action(btn, s_engine.rpn_mode);
-          calc_engine_handle_action(&s_engine, action);
+          calc_engine_handle_action(&s_engine, btn->action);
         }
         s_pressed_button = -1;
         calc_ui_set_pressed(-1);
