@@ -16,6 +16,11 @@ void calc_settings_load(CalcEngine *engine) {
     engine->rpn_mode = persist_read_bool(PERSIST_KEY_RPN_MODE);
   }
 
+  // Stack before main number: main number re-derives entry + X on top.
+  if (persist_exists(PERSIST_KEY_STACK)) {
+    persist_read_data(PERSIST_KEY_STACK, engine->stack, sizeof(engine->stack));
+  }
+
   if (persist_exists(PERSIST_KEY_MAIN_NUMBER)) {
     double main_num = 0.0;
     persist_read_data(PERSIST_KEY_MAIN_NUMBER, &main_num, sizeof(double));
@@ -47,6 +52,9 @@ void calc_settings_save(CalcEngine *engine) {
   double main_num = calc_engine_get_main_number(engine);
   persist_write_data(PERSIST_KEY_MAIN_NUMBER, &main_num, sizeof(double));
   persist_write_data(PERSIST_KEY_MEMORY, &engine->memory, sizeof(double));
+  persist_write_data(PERSIST_KEY_STACK, engine->stack, sizeof(engine->stack));
+  // DEG/RAD can now change from the watch (DRG key), not just Clay config.
+  persist_write_bool(PERSIST_KEY_DEG_MODE, engine->deg_mode);
 }
 
 void calc_settings_handle_inbox(DictionaryIterator *iter, CalcEngine *engine) {

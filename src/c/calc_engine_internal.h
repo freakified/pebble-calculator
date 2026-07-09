@@ -6,7 +6,10 @@
 
 #include "calc_engine.h"
 
-#define ERROR_VALUE 1e18
+// Domain-error sentinel returned by math helpers (e.g. divide by zero,
+// sqrt of a negative). NaN never collides with a legitimate result, so the
+// full double range stays available for large values like 10^20 or 170!.
+#define ERROR_VALUE (__builtin_nan(""))
 
 // ---------------------------------------------------------------------------
 // Helpers defined in calc_engine.c (core)

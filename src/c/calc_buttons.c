@@ -65,29 +65,32 @@ static CalcButton s_buttons[CALC_PAGE_COUNT][CALC_BUTTON_COUNT] = {
 
   // ===========================================================================
   // Page 1 — Scientific. Same buttons in both modes (the scientific page
-  // is mode-agnostic).
+  // is mode-agnostic). Every INV pairing is the key's inverse (see
+  // calc_engine_resolve_2nd).
   // ===========================================================================
   {
-    // Row 1: 2nd, sin, cos, tan
-    { .label = "2nd", .action = CALC_ACTION_2ND_TOGGLE, .rpn_action = CALC_ACTION_2ND_TOGGLE, .style = BUTTON_STYLE_MOD },
+    // Row 1: INV, sin, cos, tan
+    { .label = "INV", .action = CALC_ACTION_2ND_TOGGLE, .rpn_action = CALC_ACTION_2ND_TOGGLE, .style = BUTTON_STYLE_MOD },
     { .label = "sin", .second_label = "asin", .action = CALC_ACTION_SIN, .rpn_action = CALC_ACTION_SIN, .style = BUTTON_STYLE_FUNC },
     { .label = "cos", .second_label = "acos", .action = CALC_ACTION_COS, .rpn_action = CALC_ACTION_COS, .style = BUTTON_STYLE_FUNC },
     { .label = "tan", .second_label = "atan", .action = CALC_ACTION_TAN, .rpn_action = CALC_ACTION_TAN, .style = BUTTON_STYLE_FUNC },
-    // Row 2: ln, log, √, x²
-    { .label = "ln", .second_label = "eˣ", .action = CALC_ACTION_LN, .rpn_action = CALC_ACTION_LN, .style = BUTTON_STYLE_FUNC },
-    { .label = "log", .second_label = "10ˣ", .action = CALC_ACTION_LOG10, .rpn_action = CALC_ACTION_LOG10, .style = BUTTON_STYLE_FUNC },
-    { .label = "√", .second_label = "x³", .action = CALC_ACTION_SQRT, .rpn_action = CALC_ACTION_SQRT, .style = BUTTON_STYLE_FUNC },
-    { .label = "x²", .second_label = "³√x", .action = CALC_ACTION_SQUARE, .rpn_action = CALC_ACTION_SQUARE, .style = BUTTON_STYLE_FUNC },
-    // Row 3: 1/x, y^x, π, e
+    // Row 2: ln, log, √, y^x
+    // Caret forms, not superscript-x (U+02E3): the system font has no ˣ glyph.
+    { .label = "ln", .second_label = "e^x", .action = CALC_ACTION_LN, .rpn_action = CALC_ACTION_LN, .style = BUTTON_STYLE_FUNC },
+    { .label = "log", .second_label = "10^x", .action = CALC_ACTION_LOG10, .rpn_action = CALC_ACTION_LOG10, .style = BUTTON_STYLE_FUNC },
+    { .label = "√", .second_label = "x²", .action = CALC_ACTION_SQRT, .rpn_action = CALC_ACTION_SQRT, .style = BUTTON_STYLE_FUNC },
+    { .label = "y^x", .second_label = "x√y", .action = CALC_ACTION_POW, .rpn_action = CALC_ACTION_POW, .style = BUTTON_STYLE_OPERATOR },
+    // Row 3: 1/x, π, e, ±
     { .label = "1/x", .second_label = "x!", .action = CALC_ACTION_RECIP, .rpn_action = CALC_ACTION_RECIP, .style = BUTTON_STYLE_FUNC },
-    { .label = "yˣ", .second_label = "ˣ√y", .action = CALC_ACTION_POW, .rpn_action = CALC_ACTION_POW, .style = BUTTON_STYLE_OPERATOR },
     { .label = "π", .action = CALC_ACTION_PI, .rpn_action = CALC_ACTION_PI, .style = BUTTON_STYLE_NUMBER },
     { .label = "e", .action = CALC_ACTION_E, .rpn_action = CALC_ACTION_E, .style = BUTTON_STYLE_NUMBER },
-    // Row 4: ±, empty, empty, empty
     { .label = "±", .action = CALC_ACTION_NEGATE, .rpn_action = CALC_ACTION_NEGATE, .style = BUTTON_STYLE_NUMBER },
-    { .label = "", .action = CALC_ACTION_NOOP, .rpn_action = CALC_ACTION_NOOP, .style = BUTTON_STYLE_NONE },
-    { .label = "", .action = CALC_ACTION_NOOP, .rpn_action = CALC_ACTION_NOOP, .style = BUTTON_STYLE_NONE },
-    { .label = "", .action = CALC_ACTION_NOOP, .rpn_action = CALC_ACTION_NOOP, .style = BUTTON_STYLE_NONE },
+    // Row 4: DEG⇄RAD, →HMS, EE, % (DRG label is drawn dynamically from
+    // engine->deg_mode; the string here is a placeholder)
+    { .label = "DEG", .action = CALC_ACTION_DRG_TOGGLE, .rpn_action = CALC_ACTION_DRG_TOGGLE, .style = BUTTON_STYLE_FUNC },
+    { .label = "→HMS", .second_label = "→H", .action = CALC_ACTION_TO_HMS, .rpn_action = CALC_ACTION_TO_HMS, .style = BUTTON_STYLE_FUNC },
+    { .label = "EE", .action = CALC_ACTION_EE, .rpn_action = CALC_ACTION_EE, .style = BUTTON_STYLE_NUMBER },
+    { .label = "%", .action = CALC_ACTION_PERCENT, .rpn_action = CALC_ACTION_PERCENT, .style = BUTTON_STYLE_OPERATOR },
     // [16] C/DEL
     { .label = "C", .action = CALC_ACTION_CLEAR, .rpn_action = CALC_ACTION_CLEAR, .style = BUTTON_STYLE_CLEAR, .icon = CALC_ICON_NONE },
     // [17] unused
@@ -209,13 +212,17 @@ void calc_buttons_init(void) {
   prv_set_bounds(CALC_PAGE_BASIC, 14, prv_round_basic_cell(2, 3)); // =
 
   // Scientific page: keep the existing row-major order in the same five-slot
-  // round rows, with C in the left rail.
+  // round rows, with C in the left rail. The bottom-right rail cell is
+  // clipped by the round bezel (the basic page leaves the bottom rails empty
+  // for the same reason), so the last key (%) parks on the left rail instead.
   s_buttons[CALC_PAGE_SCI][CALC_BUTTON_INDEX_CL].bounds =
       prv_round_left_rail_cell(0);
   for (int i = 0; i < 16; i++) {
     int row = i / 4;
     int col = i % 4;
-    prv_set_bounds(CALC_PAGE_SCI, i, prv_round_five_slot_cell(col + 1, row));
+    GRect cell = (i == 15) ? prv_round_left_rail_cell(1)
+                           : prv_round_five_slot_cell(col + 1, row);
+    prv_set_bounds(CALC_PAGE_SCI, i, cell);
   }
 
   // Memory/RPN page: preserve the row-major page table in a round-safe,

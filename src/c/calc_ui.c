@@ -77,8 +77,18 @@ static const char *prv_shorten_repeating(const char *str, char *buf,
   int run = 0;
   for (int i = frac_len - 1; i >= 0 && frac[i] == last; i--)
     run++;
-  if (run < 4)
-    return str;
+  if (run < 4) {
+    // The final digit may be the rounded last place of a repeating tail
+    // (e.g. 2/3 → 0.666666666667) — retry ignoring it.
+    if (frac_len < 6)
+      return str;
+    last = frac[frac_len - 2];
+    run = 0;
+    for (int i = frac_len - 2; i >= 0 && frac[i] == last; i--)
+      run++;
+    if (run < 4)
+      return str;
+  }
 
   int int_digit_count = 0;
   for (const char *p = str; p < dot; p++) {
@@ -164,7 +174,7 @@ static void prv_draw_chips(GContext *ctx, GRect display_rect) {
   const CalcFonts *fonts = calc_fonts_get();
 
   // Chip text — concatenate active chips left-to-right.
-  // DEG/RAD only on scientific page; 2nd whenever active.
+  // DEG/RAD only on scientific page; INV and M whenever active.
   char buf[16];
   buf[0] = '\0';
 
@@ -177,7 +187,11 @@ static void prv_draw_chips(GContext *ctx, GRect display_rect) {
   }
   if (s_engine->second_active) {
     if (buf[0] != '\0') strcat(buf, " ");
-    strcat(buf, "2nd");
+    strcat(buf, "INV");
+  }
+  if (s_engine->memory != 0.0) {
+    if (buf[0] != '\0') strcat(buf, " ");
+    strcat(buf, "M");
   }
 
   if (buf[0] == '\0') return;
@@ -326,6 +340,10 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
 
     // Draw label
     const char *label = calc_button_get_label(btn, rpn, second);
+    // DRG key shows the CURRENT angle mode; pressing it flips.
+    if (effective_action == CALC_ACTION_DRG_TOGGLE) {
+      label = s_engine->deg_mode ? "DEG" : "RAD";
+    }
     graphics_context_set_text_color(ctx, text);
 
     GFont font;

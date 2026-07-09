@@ -12,7 +12,17 @@
 static Window *s_window;
 static Layer *s_ui_layer;
 static CalcEngine s_engine;
-static int s_pressed_button = -1;
+
+// Touch gesture state: the button under the initial touchdown stays the
+// gesture's target for its whole lifetime. Dragging off it cancels the press
+// visually, but dragging back re-arms it (matching platform button behavior);
+// only liftoff while inside fires the action.
+static int s_touch_button = -1;   // origin button of the current gesture
+static bool s_touch_inside = false;
+
+// Extra margin around a button that still counts as "inside" while dragging,
+// so a small wobble at a shared cell edge doesn't cancel the press.
+#define TOUCH_SLOP_PX 4
 
 static const uint32_t s_vibe_durations[] = {10};
 static const VibePattern s_vibe_pattern = {.durations = s_vibe_durations,
@@ -28,7 +38,8 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
     int idx = calc_buttons_hit_test(s_engine.page, GPoint(event->x, event->y),
                                     s_engine.rpn_mode);
     if (idx >= 0) {
-      s_pressed_button = idx;
+      s_touch_button = idx;
+      s_touch_inside = true;
       calc_ui_set_pressed(idx);
       if (calc_settings_haptic_enabled()) {
         vibes_enqueue_custom_pattern(s_vibe_pattern);
@@ -39,12 +50,17 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
   }
 
   case TouchEvent_PositionUpdate: {
-    if (s_pressed_button >= 0) {
-      const CalcButton *btn = calc_buttons_get(s_engine.page, s_pressed_button);
+    if (s_touch_button >= 0) {
+      const CalcButton *btn = calc_buttons_get(s_engine.page, s_touch_button);
       GPoint p = GPoint(event->x, event->y);
-      if (btn && !grect_contains_point(&btn->bounds, &p)) {
-        s_pressed_button = -1;
-        calc_ui_set_pressed(-1);
+      bool inside = false;
+      if (btn) {
+        GRect slop = grect_inset(btn->bounds, GEdgeInsets(-TOUCH_SLOP_PX));
+        inside = grect_contains_point(&slop, &p);
+      }
+      if (inside != s_touch_inside) {
+        s_touch_inside = inside;
+        calc_ui_set_pressed(inside ? s_touch_button : -1);
         calc_ui_mark_dirty();
       }
     }
@@ -52,14 +68,15 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
   }
 
   case TouchEvent_Liftoff: {
-    if (s_pressed_button >= 0) {
-      const CalcButton *btn = calc_buttons_get(s_engine.page, s_pressed_button);
-      if (btn) {
+    if (s_touch_button >= 0) {
+      const CalcButton *btn = calc_buttons_get(s_engine.page, s_touch_button);
+      if (btn && s_touch_inside) {
         CalcAction action = calc_button_get_action(btn, s_engine.rpn_mode);
         // The engine resolves the 2nd-modifier itself, so dispatch raw.
         calc_engine_handle_action(&s_engine, action);
       }
-      s_pressed_button = -1;
+      s_touch_button = -1;
+      s_touch_inside = false;
       calc_ui_set_pressed(-1);
       calc_ui_mark_dirty();
     }
@@ -79,11 +96,11 @@ static void prv_select_click(ClickRecognizerRef recognizer, void *context) {
   calc_ui_mark_dirty();
 }
 
+// UP: swap X↔Y in RPN; negate in standard (rect basic page has no ± key).
 static void prv_up_click(ClickRecognizerRef recognizer, void *context) {
-  if (s_engine.rpn_mode) {
-    calc_engine_handle_action(&s_engine, CALC_ACTION_SWAP);
-    calc_ui_mark_dirty();
-  }
+  calc_engine_handle_action(&s_engine, s_engine.rpn_mode ? CALC_ACTION_SWAP
+                                                         : CALC_ACTION_NEGATE);
+  calc_ui_mark_dirty();
 }
 
 static void prv_down_click(ClickRecognizerRef recognizer, void *context) {

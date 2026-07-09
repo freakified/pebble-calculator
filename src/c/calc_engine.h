@@ -55,10 +55,11 @@ typedef enum {
   CALC_ACTION_POW10,     // 10^x
   CALC_ACTION_SQRT,
   CALC_ACTION_SQUARE,
-  CALC_ACTION_CUBE,
-  CALC_ACTION_CBRT,
   CALC_ACTION_RECIP,
   CALC_ACTION_FACT,
+  CALC_ACTION_TO_HMS,    // decimal hours → H.MMSS
+  CALC_ACTION_TO_H,      // H.MMSS → decimal hours
+  CALC_ACTION_PERCENT,
 
   // Scientific (binary — chainable via the standard pending-op path or RPN-pop path)
   CALC_ACTION_POW,       // y^x
@@ -68,8 +69,12 @@ typedef enum {
   CALC_ACTION_PI,
   CALC_ACTION_E,
 
-  // Modifier
+  // Entry
+  CALC_ACTION_EE,        // start exponent entry (appends 'e')
+
+  // Modifiers / modes
   CALC_ACTION_2ND_TOGGLE,
+  CALC_ACTION_DRG_TOGGLE, // flip deg_mode
 
   // Memory
   CALC_ACTION_M_PLUS,

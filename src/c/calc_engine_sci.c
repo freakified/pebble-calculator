@@ -26,6 +26,35 @@ static double prv_factorial(double x) {
   return result;
 }
 
+// Decimal hours (or degrees) → H.MMSS sexagesimal encoding: 1.755 → 1.4518
+// (1h 45m 18s). Work in integer centi-seconds so 59.999… seconds can't leak
+// into the minutes field.
+static double prv_to_hms(double x) {
+  bool neg = x < 0.0;
+  double a = neg ? -x : x;
+  if (a > 1e12) return x; // minutes/seconds are below double precision anyway
+  long long cs = (long long)(a * 360000.0 + 0.5);
+  long long h = cs / 360000;
+  cs %= 360000;
+  long long m = cs / 6000;
+  cs %= 6000; // remaining centi-seconds
+  double r = (double)h + (double)m / 100.0 + (double)cs / 1000000.0;
+  return neg ? -r : r;
+}
+
+// H.MMSS sexagesimal encoding → decimal hours: 1.4518 → 1.755.
+static double prv_from_hms(double x) {
+  bool neg = x < 0.0;
+  double a = neg ? -x : x;
+  if (a > 1e12) return x;
+  long long h = (long long)a;
+  long long v = (long long)((a - (double)h) * 1000000.0 + 0.5); // MMSScc
+  long long m = v / 10000;
+  double s = (double)(v % 10000) / 100.0;
+  double r = (double)h + (double)m / 60.0 + s / 3600.0;
+  return neg ? -r : r;
+}
+
 static double prv_apply_unary(CalcAction action, double x, bool deg_mode) {
   switch (action) {
     case CALC_ACTION_SIN:    return sin(prv_to_radians(x, deg_mode));
@@ -50,12 +79,8 @@ static double prv_apply_unary(CalcAction action, double x, bool deg_mode) {
       if (x < 0.0) return ERROR_VALUE;
       return sqrt(x);
     case CALC_ACTION_SQUARE: return x * x;
-    case CALC_ACTION_CUBE:   return x * x * x;
-    case CALC_ACTION_CBRT: {
-      // No standard cbrt on Pebble; pow handles negatives via sign extraction.
-      if (x < 0.0) return -pow(-x, 1.0 / 3.0);
-      return pow(x, 1.0 / 3.0);
-    }
+    case CALC_ACTION_TO_HMS: return prv_to_hms(x);
+    case CALC_ACTION_TO_H:   return prv_from_hms(x);
     case CALC_ACTION_RECIP:
       if (x == 0.0) return ERROR_VALUE;
       return 1.0 / x;
@@ -121,6 +146,8 @@ void ce_sci_handle_e(CalcEngine *e) {
   prv_handle_constant(e, E_VALUE);
 }
 
+// Every INV pairing is the key's true inverse; the one convention is
+// 1/x → x! (1/x is its own inverse, so the slot is reused, TI-style).
 CalcAction calc_engine_resolve_2nd(CalcAction action, bool second_active) {
   if (!second_active) return action;
   switch (action) {
@@ -129,10 +156,10 @@ CalcAction calc_engine_resolve_2nd(CalcAction action, bool second_active) {
     case CALC_ACTION_TAN:    return CALC_ACTION_ATAN;
     case CALC_ACTION_LN:     return CALC_ACTION_EXP;
     case CALC_ACTION_LOG10:  return CALC_ACTION_POW10;
-    case CALC_ACTION_SQRT:   return CALC_ACTION_CUBE;
-    case CALC_ACTION_SQUARE: return CALC_ACTION_CBRT;
+    case CALC_ACTION_SQRT:   return CALC_ACTION_SQUARE;
     case CALC_ACTION_POW:    return CALC_ACTION_NTHROOT;
     case CALC_ACTION_RECIP:  return CALC_ACTION_FACT;
+    case CALC_ACTION_TO_HMS: return CALC_ACTION_TO_H;
     default:                 return action;
   }
 }

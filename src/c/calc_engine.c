@@ -14,13 +14,13 @@ static double prv_fabs(double x) {
 }
 
 bool ce_is_error(double x) {
-  return prv_fabs(x) > 9.999e15;
+  return !(x == x); // NaN sentinel (ERROR_VALUE)
 }
 
 // NaN/Infinity detection without relying on isnan/isinf macros — anything
 // outside the doubles we can format is treated as an error.
 bool ce_is_nan_or_inf(double x) {
-  return !(x == x) || prv_fabs(x) > 1e300;
+  return !(x == x) || prv_fabs(x) > 9.9999e307;
 }
 
 static int prv_count_digits(const char *s, int len) {
@@ -160,6 +160,23 @@ static void prv_handle_digit(CalcEngine *e, int digit) {
     return;
   }
 
+  // Exponent entry (after EE): digits go to the exponent, capped at 3, and
+  // skip the mantissa rules below.
+  char *epos = memchr(e->entry, 'e', e->entry_len);
+  if (epos) {
+    int exp_start = (int)(epos - e->entry) + 1;
+    if (exp_start < e->entry_len && e->entry[exp_start] == '-') exp_start++;
+    int exp_digits = e->entry_len - exp_start;
+    if (exp_digits == 1 && e->entry[exp_start] == '0') {
+      e->entry[exp_start] = '0' + digit; // replace a leading exponent zero
+      return;
+    }
+    if (exp_digits >= 3 || e->entry_len >= CALC_DISPLAY_MAX) return;
+    e->entry[e->entry_len++] = '0' + digit;
+    e->entry[e->entry_len] = '\0';
+    return;
+  }
+
   // Already entering — append digit
   // Cap digits to what fits on display (sign takes one digit slot)
   int max_digits = (e->entry[0] == '-') ? (CALC_FORMAT_MAX_DIGITS - 1) : CALC_FORMAT_MAX_DIGITS;
@@ -209,6 +226,7 @@ static void prv_handle_dot(CalcEngine *e) {
   }
 
   if (e->has_dot) return;
+  if (memchr(e->entry, 'e', e->entry_len)) return; // no dot in an exponent
   if (e->entry_len >= CALC_DISPLAY_MAX - 1) return; // buffer safety cap
 
   e->entry[e->entry_len] = '.';
@@ -293,6 +311,13 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
   if (action == CALC_ACTION_PAGE_NEXT) {
     engine->page = (engine->page + 1) % CALC_PAGE_COUNT;
     engine->second_active = false;
+    return;
+  }
+
+  // DEG⇄RAD is a mode flip, not a computation — like paging, it leaves the
+  // entry, tape, and INV state untouched.
+  if (action == CALC_ACTION_DRG_TOGGLE) {
+    engine->deg_mode = !engine->deg_mode;
     return;
   }
 
@@ -395,11 +420,52 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
     goto done;
   }
 
+  // EE — begin exponent entry. On a fresh entry seeds "1e" (so EE 5 = means
+  // 1e5); while typing appends 'e' to the mantissa.
+  if (resolved == CALC_ACTION_EE) {
+    if (engine->error) ce_recover_from_error(engine);
+    engine->right_committed = false;
+    if (!engine->entering) {
+      if (engine->rpn_mode && engine->stack_lift_enabled) {
+        ce_stack_push(engine, ce_entry_to_double(engine));
+      }
+      engine->entry[0] = '1';
+      engine->entry[1] = 'e';
+      engine->entry[2] = '\0';
+      engine->entry_len = 2;
+      engine->has_dot = false;
+      engine->entering = true;
+    } else if (memchr(engine->entry, 'e', engine->entry_len) == NULL &&
+               engine->entry_len < CALC_DISPLAY_MAX) {
+      engine->entry[engine->entry_len++] = 'e';
+      engine->entry[engine->entry_len] = '\0';
+    }
+    if (engine->rpn_mode) {
+      engine->stack[3] = ce_entry_to_double(engine);
+    }
+    goto done;
+  }
+
   // Negate
   if (resolved == CALC_ACTION_NEGATE) {
     if (engine->error) goto done;
     if (engine->entering) {
-      if (engine->entry[0] == '-') {
+      // During exponent entry, ± flips the exponent's sign (calculator
+      // convention), not the mantissa's.
+      char *epos = memchr(engine->entry, 'e', engine->entry_len);
+      if (epos) {
+        int at = (int)(epos - engine->entry) + 1;
+        if (at < engine->entry_len && engine->entry[at] == '-') {
+          memmove(engine->entry + at, engine->entry + at + 1,
+                  engine->entry_len - at); // includes the null
+          engine->entry_len--;
+        } else if (engine->entry_len < CALC_DISPLAY_MAX) {
+          memmove(engine->entry + at + 1, engine->entry + at,
+                  engine->entry_len - at + 1);
+          engine->entry[at] = '-';
+          engine->entry_len++;
+        }
+      } else if (engine->entry[0] == '-') {
         memmove(engine->entry, engine->entry + 1, engine->entry_len);
         engine->entry_len--;
       } else {
@@ -460,9 +526,40 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
       resolved == CALC_ACTION_LN || resolved == CALC_ACTION_LOG10 ||
       resolved == CALC_ACTION_EXP || resolved == CALC_ACTION_POW10 ||
       resolved == CALC_ACTION_SQRT || resolved == CALC_ACTION_SQUARE ||
-      resolved == CALC_ACTION_CUBE || resolved == CALC_ACTION_CBRT ||
+      resolved == CALC_ACTION_TO_HMS || resolved == CALC_ACTION_TO_H ||
       resolved == CALC_ACTION_RECIP || resolved == CALC_ACTION_FACT) {
     ce_sci_handle_unary(engine, resolved);
+    goto done;
+  }
+
+  // Percent. Standard mode follows desk-calculator convention: with a pending
+  // + or − the entry becomes that percentage OF the left operand ("200 + 10%"
+  // → 200 + 20); with ×/÷ or no pending op it's a bare factor (x/100). RPN is
+  // the HP behavior: X ← Y·X/100 with Y preserved.
+  if (resolved == CALC_ACTION_PERCENT) {
+    if (engine->error) goto done;
+    if (engine->rpn_mode) {
+      ce_terminate_entry(engine);
+      double x = engine->stack[3];
+      double result = engine->stack[2] * x / 100.0;
+      if (ce_is_nan_or_inf(result)) { ce_set_error(engine); goto done; }
+      engine->last_x = x;
+      engine->stack[3] = result;
+      ce_double_to_entry(engine, result);
+      engine->stack_lift_enabled = true;
+    } else {
+      double x = ce_entry_to_double(engine);
+      double result = x / 100.0;
+      if (engine->op_stack_size > 0) {
+        CalcOpFrame *top = &engine->op_stack[engine->op_stack_size - 1];
+        if (top->op == CALC_OP_ADD || top->op == CALC_OP_SUBTRACT) {
+          result = top->value * x / 100.0;
+        }
+      }
+      if (ce_is_nan_or_inf(result)) { ce_set_error(engine); goto done; }
+      ce_double_to_entry(engine, result);
+      engine->right_committed = true;
+    }
     goto done;
   }
 
