@@ -54,6 +54,28 @@ double calc_format_parse(const char *str, int len) {
   return negative ? -result : result;
 }
 
+int calc_format_display_width(const char *str, int len) {
+  int w = 0;
+  for (int i = 0; i < len; i++) {
+    if (str[i] == '-') w += CALC_FORMAT_W_MINUS;
+    else if (str[i] == '.') w += CALC_FORMAT_W_DOT;
+    else w += CALC_FORMAT_W_DIGIT;
+  }
+  return w;
+}
+
+static long long prv_pow10_ll(int n) {
+  long long p = 1;
+  while (n-- > 0) p *= 10;
+  return p;
+}
+
+static int prv_int_digit_count(long long n) {
+  int count = 1;
+  while (n > 9) { count++; n /= 10; }
+  return count;
+}
+
 static int prv_exp_suffix_chars(int exp) {
   int abs_exp = exp < 0 ? -exp : exp;
   int chars = 1; // 'e'
@@ -84,8 +106,7 @@ static int prv_format_scientific(double val, char *buf, bool negative) {
   if (avail < 0) avail = 0;
 
   // Round the whole mantissa at the last displayed digit.
-  long long scale = 1;
-  for (int i = 0; i < avail; i++) scale *= 10;
+  long long scale = prv_pow10_ll(avail);
   long long m = (long long)(mantissa * (double)scale + 0.5);
   if (m >= 10 * scale) {
     // 9.99… rounded up to 10.0 — carry into the exponent. The carried
@@ -94,8 +115,7 @@ static int prv_format_scientific(double val, char *buf, bool negative) {
     exp++;
     avail = CALC_FORMAT_SCI_MAX - pos - 1 - 1 - prv_exp_suffix_chars(exp);
     if (avail < 0) avail = 0;
-    scale = 1;
-    for (int i = 0; i < avail; i++) scale *= 10;
+    scale = prv_pow10_ll(avail);
     m = scale;
   }
 
@@ -143,7 +163,7 @@ int calc_format_double(double val, char *buf, bool *out_error) {
   }
 
   // True error: NaN or beyond double's representable range.
-  if (val != val || val > 9.9999e307) {
+  if (val != val || val > CALC_FORMAT_MAX_ABS) {
     memcpy(buf, "Error", 6);
     if (out_error) *out_error = true;
     return 5;
@@ -153,37 +173,25 @@ int calc_format_double(double val, char *buf, bool *out_error) {
 
   // Too many integer digits for the plain format — scientific. (Also keeps
   // the long long cast below well in range.)
-  if (val >= (negative ? 1e12 : 1e13)) {
+  if (val >= (negative ? 1e11 : 1e12)) {
     return prv_format_scientific(val, buf, negative);
   }
 
   long long int_part = (long long)val;
   double frac_part = val - (double)int_part;
-
-  int int_digit_count = 0;
-  {
-    long long n = int_part;
-    if (n == 0) {
-      int_digit_count = 1;
-    } else {
-      while (n > 0) { int_digit_count++; n /= 10; }
-    }
-  }
+  int int_digit_count = prv_int_digit_count(int_part);
 
   // Round the fraction at the last displayed digit (this is what keeps
   // 1.2 + 1.2 from showing as 2.399999999).
   int max_frac = max_digits - int_digit_count;
   if (max_frac < 0) max_frac = 0;
-  long long frac_scale = 1;
-  for (int i = 0; i < max_frac; i++) frac_scale *= 10;
+  long long frac_scale = prv_pow10_ll(max_frac);
   long long frac_scaled = (long long)(frac_part * (double)frac_scale + 0.5);
   if (frac_scaled >= frac_scale) {
     // Fraction rounded up to 1.0 — carry into the integer part.
     frac_scaled = 0;
     int_part++;
-    int_digit_count = 0;
-    long long n = int_part;
-    while (n > 0) { int_digit_count++; n /= 10; }
+    int_digit_count = prv_int_digit_count(int_part);
     if (int_digit_count > max_digits) {
       return prv_format_scientific(val, buf, negative);
     }

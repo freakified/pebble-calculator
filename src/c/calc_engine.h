@@ -3,13 +3,15 @@
 #include <pebble.h>
 #include "calc_format.h"
 
-// Maximum characters in the display buffer (must hold 13 digits + sign + dot + null)
+// Maximum characters in the display buffer (must hold 12 digits + sign + dot + null)
 #define CALC_DISPLAY_MAX 16
 
-// Max digit characters (0-9) that fit in the X display with LECO 32 Bold.
-// The decimal point is narrower and doesn't consume a digit slot.
-// The minus sign DOES consume one digit slot.
-#define CALC_X_MAX_DIGITS_LECO 7
+// Max digit characters (0-9) guaranteed to fit in the X display with LECO 32
+// Bold, used as the target when shortening repeating-decimal tails. Measured
+// LECO advances: digits 20px (17-20), '.' 9px, '-' 13px; 6 digits + dot =
+// 129px fits the 138px text area, 7 digits (140px) does not. The UI picks the
+// font by measuring the actual string, so narrow digits can still exceed this.
+#define CALC_X_MAX_DIGITS_LECO 6
 
 // Number of pages cycled through by the SELECT button.
 #define CALC_PAGE_COUNT 3

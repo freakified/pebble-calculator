@@ -24,6 +24,14 @@ static bool s_touch_inside = false;
 // so a small wobble at a shared cell edge doesn't cancel the press.
 #define TOUCH_SLOP_PX 4
 
+static void prv_touch_cancel(void) {
+  if (s_touch_button >= 0) {
+    s_touch_button = -1;
+    s_touch_inside = false;
+    calc_ui_set_pressed(-1);
+  }
+}
+
 static const uint32_t s_vibe_durations[] = {10};
 static const VibePattern s_vibe_pattern = {.durations = s_vibe_durations,
                                            .num_segments = 1};
@@ -90,8 +98,10 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
 // ---------------------------------------------------------------------------
 
 // SELECT cycles through pages — the on-screen ± has moved to the scientific
-// page.
+// page. Any in-flight touch gesture is cancelled: its origin index refers to
+// the OLD page's button table, so liftoff must not fire on the new page.
 static void prv_select_click(ClickRecognizerRef recognizer, void *context) {
+  prv_touch_cancel();
   calc_engine_handle_action(&s_engine, CALC_ACTION_PAGE_NEXT);
   calc_ui_mark_dirty();
 }

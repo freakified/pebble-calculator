@@ -246,34 +246,37 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
                      NULL);
 
   // Primary line: X register, large.
-  // Font tiers: ≤7 digits → LECO 32 Bold, 8+ digits or sci notation → GOTHIC 28
-  // Bold. Repeating-decimal tails are shortened before the digit count so they
-  // don't needlessly push the display into the compact font.
+  // Font tiers: LECO 32 Bold if the string's measured width fits, else GOTHIC
+  // 28 Bold (whose metrics the formatter/entry caps are derived from, so it
+  // always fits — the trailing-ellipsis mode below should never fire).
+  // Repeating-decimal tails are shortened first so they don't needlessly push
+  // the display into the compact font.
   const char *x_str = calc_engine_get_x_display(s_engine);
-
-  int digit_count = 0;
-  for (const char *p = x_str; *p; p++) {
-    if (*p >= '0' && *p <= '9')
-      digit_count++;
-  }
 
   char x_short_buf[CALC_DISPLAY_MAX + 1];
   const char *x_display = x_str;
-  if (digit_count > CALC_X_MAX_DIGITS_LECO && !s_engine->error &&
-      strchr(x_str, 'e') == NULL) {
-    x_display = prv_shorten_repeating(x_str, x_short_buf, sizeof(x_short_buf),
-                                      CALC_X_MAX_DIGITS_LECO);
-    if (x_display != x_str) {
-      digit_count = 0;
-      for (const char *p = x_display; *p; p++) {
-        if (*p >= '0' && *p <= '9')
-          digit_count++;
+  bool use_compact_font = s_engine->error || strchr(x_str, 'e') != NULL;
+  if (!use_compact_font) {
+    const GRect measure_box = GRect(0, 0, 500, 40);
+    GSize sz = graphics_text_layout_get_content_size(
+        x_display, fonts->x_register, measure_box, GTextOverflowModeWordWrap,
+        GTextAlignmentLeft);
+    if (sz.w > text_w) {
+      x_display = prv_shorten_repeating(x_str, x_short_buf, sizeof(x_short_buf),
+                                        CALC_X_MAX_DIGITS_LECO);
+      if (x_display != x_str) {
+        sz = graphics_text_layout_get_content_size(
+            x_display, fonts->x_register, measure_box, GTextOverflowModeWordWrap,
+            GTextAlignmentLeft);
+      }
+      use_compact_font = sz.w > text_w;
+      if (use_compact_font) {
+        // The compact font fits the full string — no need to show the
+        // shortened form there.
+        x_display = x_str;
       }
     }
   }
-
-  bool use_compact_font = (digit_count > CALC_X_MAX_DIGITS_LECO) ||
-                          (strchr(x_display, 'e') != NULL) || s_engine->error;
   GFont x_font = use_compact_font ? fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD)
                                   : fonts->x_register;
   graphics_context_set_text_color(ctx, s_engine->error ? GColorDarkCandyAppleRed

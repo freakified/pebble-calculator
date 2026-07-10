@@ -20,7 +20,7 @@ bool ce_is_error(double x) {
 // NaN/Infinity detection without relying on isnan/isinf macros — anything
 // outside the doubles we can format is treated as an error.
 bool ce_is_nan_or_inf(double x) {
-  return !(x == x) || prv_fabs(x) > 9.9999e307;
+  return !(x == x) || prv_fabs(x) > CALC_FORMAT_MAX_ABS;
 }
 
 static int prv_count_digits(const char *s, int len) {
@@ -172,6 +172,8 @@ static void prv_handle_digit(CalcEngine *e, int digit) {
       return;
     }
     if (exp_digits >= 3 || e->entry_len >= CALC_DISPLAY_MAX) return;
+    if (calc_format_display_width(e->entry, e->entry_len) + CALC_FORMAT_W_DIGIT >
+        CALC_FORMAT_DISPLAY_W) return;
     e->entry[e->entry_len++] = '0' + digit;
     e->entry[e->entry_len] = '\0';
     return;
@@ -436,7 +438,13 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
       engine->has_dot = false;
       engine->entering = true;
     } else if (memchr(engine->entry, 'e', engine->entry_len) == NULL &&
-               engine->entry_len < CALC_DISPLAY_MAX) {
+               engine->entry_len < CALC_DISPLAY_MAX &&
+               // Room for the 'e' plus at least one exponent digit — a
+               // mantissa typed to the display's full width can't take an
+               // exponent, so the keypress is ignored like any other
+               // full-display input.
+               calc_format_display_width(engine->entry, engine->entry_len) +
+                       2 * CALC_FORMAT_W_DIGIT <= CALC_FORMAT_DISPLAY_W) {
       engine->entry[engine->entry_len++] = 'e';
       engine->entry[engine->entry_len] = '\0';
     }
@@ -459,7 +467,9 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
           memmove(engine->entry + at, engine->entry + at + 1,
                   engine->entry_len - at); // includes the null
           engine->entry_len--;
-        } else if (engine->entry_len < CALC_DISPLAY_MAX) {
+        } else if (engine->entry_len < CALC_DISPLAY_MAX &&
+                   calc_format_display_width(engine->entry, engine->entry_len) +
+                           CALC_FORMAT_W_MINUS <= CALC_FORMAT_DISPLAY_W) {
           memmove(engine->entry + at + 1, engine->entry + at,
                   engine->entry_len - at + 1);
           engine->entry[at] = '-';
@@ -469,7 +479,9 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
         memmove(engine->entry, engine->entry + 1, engine->entry_len);
         engine->entry_len--;
       } else {
-        if (engine->entry_len < CALC_DISPLAY_MAX - 1) {
+        if (engine->entry_len < CALC_DISPLAY_MAX - 1 &&
+            calc_format_display_width(engine->entry, engine->entry_len) +
+                    CALC_FORMAT_W_MINUS <= CALC_FORMAT_DISPLAY_W) {
           memmove(engine->entry + 1, engine->entry, engine->entry_len + 1);
           engine->entry[0] = '-';
           engine->entry_len++;
