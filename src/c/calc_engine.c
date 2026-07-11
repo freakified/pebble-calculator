@@ -338,9 +338,13 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
   // snapshot no longer matches what's on screen. Equals re-populates after.
   engine->last_expression[0] = '\0';
 
-  // Reset just_cleared on every action; the C-while-not-entering path overrides
-  // this back to true when appropriate.
-  engine->just_cleared = false;
+  // Reset just_cleared on any action outside the Clear/Backspace family. (Those
+  // two actions manage the flag themselves, below, to implement the C→AC
+  // double-tap — resetting it unconditionally here would wipe it before the
+  // Clear/Backspace handler ever got to read it.)
+  if (resolved != CALC_ACTION_CLEAR && resolved != CALC_ACTION_BACKSPACE) {
+    engine->just_cleared = false;
+  }
 
   // Backspace / Clear
   if (resolved == CALC_ACTION_BACKSPACE || resolved == CALC_ACTION_CLEAR) {
@@ -379,9 +383,13 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
     // Not entering, no error
     if (engine->rpn_mode) {
       if (engine->just_cleared) {
-        // AC: clear full stack
+        // AC: clear full stack and memory, mirroring standard mode's
+        // C→AC (which wipes the memory register on the second press).
         for (int i = 0; i < 4; i++) engine->stack[i] = 0.0;
+        engine->memory = 0.0;
+        engine->last_x = 0.0;
         ce_clear_entry(engine);
+        engine->just_cleared = false;
       } else {
         ce_rpn_clear_x(engine);
         engine->just_cleared = true;
