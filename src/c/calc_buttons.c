@@ -67,30 +67,31 @@ static CalcButton s_buttons[CALC_PAGE_COUNT][CALC_BUTTON_COUNT] = {
   // Page 1 — Scientific. Same buttons in both modes (the scientific page
   // is mode-agnostic). Every INV pairing is the key's inverse (see
   // calc_engine_resolve_2nd). DEG/RAD sits next to INV since both are
-  // mode-toggle keys; the rest shift down to keep their grouping intact.
+  // mode-toggle keys. Colors: grey (NUMBER) marks constants (π, e, EE);
+  // blue (FUNC) marks unary/transform functions.
   // ===========================================================================
   {
-    // Row 1: INV, DEG⇄RAD, sin, cos (DRG label is drawn dynamically from
+    // Row 1: INV, DEG⇄RAD, π, e (DRG label is drawn dynamically from
     // engine->deg_mode; the string here is a placeholder)
     { .label = "INV", .action = CALC_ACTION_2ND_TOGGLE, .rpn_action = CALC_ACTION_2ND_TOGGLE, .style = BUTTON_STYLE_MOD },
     { .label = "DEG", .action = CALC_ACTION_DRG_TOGGLE, .rpn_action = CALC_ACTION_DRG_TOGGLE, .style = BUTTON_STYLE_DRG },
-    { .label = "sin", .second_label = "asin", .action = CALC_ACTION_SIN, .rpn_action = CALC_ACTION_SIN, .style = BUTTON_STYLE_FUNC },
-    { .label = "cos", .second_label = "acos", .action = CALC_ACTION_COS, .rpn_action = CALC_ACTION_COS, .style = BUTTON_STYLE_FUNC },
-    // Row 2: tan, ln, log, √
-    // Caret forms, not superscript-x (U+02E3): the system font has no ˣ glyph.
-    { .label = "tan", .second_label = "atan", .action = CALC_ACTION_TAN, .rpn_action = CALC_ACTION_TAN, .style = BUTTON_STYLE_FUNC },
-    { .label = "ln", .second_label = "e^x", .action = CALC_ACTION_LN, .rpn_action = CALC_ACTION_LN, .style = BUTTON_STYLE_FUNC },
-    { .label = "log", .second_label = "10^x", .action = CALC_ACTION_LOG10, .rpn_action = CALC_ACTION_LOG10, .style = BUTTON_STYLE_FUNC },
-    { .label = "√", .second_label = "x²", .action = CALC_ACTION_SQRT, .rpn_action = CALC_ACTION_SQRT, .style = BUTTON_STYLE_FUNC },
-    // Row 3: y^x, 1/x, π, e
-    { .label = "y^x", .second_label = "x√y", .action = CALC_ACTION_POW, .rpn_action = CALC_ACTION_POW, .style = BUTTON_STYLE_OPERATOR },
-    { .label = "1/x", .second_label = "x!", .action = CALC_ACTION_RECIP, .rpn_action = CALC_ACTION_RECIP, .style = BUTTON_STYLE_FUNC },
     { .label = "π", .action = CALC_ACTION_PI, .rpn_action = CALC_ACTION_PI, .style = BUTTON_STYLE_NUMBER },
     { .label = "e", .action = CALC_ACTION_E, .rpn_action = CALC_ACTION_E, .style = BUTTON_STYLE_NUMBER },
-    // Row 4: ±, →HMS, EE, %
-    { .label = "±", .action = CALC_ACTION_NEGATE, .rpn_action = CALC_ACTION_NEGATE, .style = BUTTON_STYLE_NUMBER },
-    { .label = "→HMS", .second_label = "→H", .action = CALC_ACTION_TO_HMS, .rpn_action = CALC_ACTION_TO_HMS, .style = BUTTON_STYLE_FUNC },
+    // Row 2: sin, cos, tan, √
+    { .label = "sin", .second_label = "asin", .action = CALC_ACTION_SIN, .rpn_action = CALC_ACTION_SIN, .style = BUTTON_STYLE_FUNC },
+    { .label = "cos", .second_label = "acos", .action = CALC_ACTION_COS, .rpn_action = CALC_ACTION_COS, .style = BUTTON_STYLE_FUNC },
+    { .label = "tan", .second_label = "atan", .action = CALC_ACTION_TAN, .rpn_action = CALC_ACTION_TAN, .style = BUTTON_STYLE_FUNC },
+    { .label = "√", .second_label = "x²", .action = CALC_ACTION_SQRT, .rpn_action = CALC_ACTION_SQRT, .style = BUTTON_STYLE_FUNC },
+    // Row 3: ln, log, 1/x, ±
+    // Caret forms, not superscript-x (U+02E3): the system font has no ˣ glyph.
+    { .label = "ln", .second_label = "e^x", .action = CALC_ACTION_LN, .rpn_action = CALC_ACTION_LN, .style = BUTTON_STYLE_FUNC },
+    { .label = "log", .second_label = "10^x", .action = CALC_ACTION_LOG10, .rpn_action = CALC_ACTION_LOG10, .style = BUTTON_STYLE_FUNC },
+    { .label = "1/x", .second_label = "x!", .action = CALC_ACTION_RECIP, .rpn_action = CALC_ACTION_RECIP, .style = BUTTON_STYLE_FUNC },
+    { .label = "±", .action = CALC_ACTION_NEGATE, .rpn_action = CALC_ACTION_NEGATE, .style = BUTTON_STYLE_FUNC },
+    // Row 4: EE, →HMS, y^x, %
     { .label = "EE", .action = CALC_ACTION_EE, .rpn_action = CALC_ACTION_EE, .style = BUTTON_STYLE_NUMBER },
+    { .label = "→HMS", .second_label = "→H", .action = CALC_ACTION_TO_HMS, .rpn_action = CALC_ACTION_TO_HMS, .style = BUTTON_STYLE_FUNC },
+    { .label = "y^x", .second_label = "x√y", .action = CALC_ACTION_POW, .rpn_action = CALC_ACTION_POW, .style = BUTTON_STYLE_OPERATOR },
     { .label = "%", .action = CALC_ACTION_PERCENT, .rpn_action = CALC_ACTION_PERCENT, .style = BUTTON_STYLE_OPERATOR },
     // [16] C/DEL
     { .label = "C", .action = CALC_ACTION_CLEAR, .rpn_action = CALC_ACTION_CLEAR, .style = BUTTON_STYLE_CLEAR, .icon = CALC_ICON_NONE },
