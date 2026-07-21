@@ -12,6 +12,7 @@ typedef enum {
   BUTTON_STYLE_CLEAR,     // C / clear-X button: light gray bg, red text
   BUTTON_STYLE_FUNC,      // Sci/memory/stack functions — muted blue-gray bg
   BUTTON_STYLE_MOD,       // 2nd modifier — yellow when active, FUNC otherwise
+  BUTTON_STYLE_DRG,       // DEG/RAD toggle — vivid cerulean bg, black text
   BUTTON_STYLE_NONE,      // Empty slot — not drawn, not pressable
 } CalcButtonStyle;
 

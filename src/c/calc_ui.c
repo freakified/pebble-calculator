@@ -17,6 +17,12 @@
 #define PAGE_DOT_RADIUS 2
 #define PAGE_DOT_SPACING 7
 
+// Button state-indicator dot geometry — drawn above the label on the INV
+// and DEG/RAD buttons in place of the display-area chips they replaced.
+#define STATE_DOT_RADIUS 2
+#define STATE_DOT_SPACING 8
+#define STATE_DOT_TOP_MARGIN 7
+
 // Colors
 #define COLOR_BG GColorBlack
 #define COLOR_DISPLAY_BG GColorWhite
@@ -39,13 +45,23 @@
 #define COLOR_FUNC_BG GColorCobaltBlue
 #define COLOR_FUNC_TEXT GColorWhite
 
-// 2nd modifier — yellow when active, FUNC color when inactive.
-#define COLOR_MOD_ACTIVE_BG GColorYellow
+// 2nd modifier (INV) — yellow when inactive, army green when toggled on.
+#define COLOR_MOD_BG GColorYellow
+#define COLOR_MOD_TEXT GColorBlack
+#define COLOR_MOD_ACTIVE_BG GColorArmyGreen
 #define COLOR_MOD_ACTIVE_TEXT GColorBlack
+
+// DEG/RAD toggle.
+#define COLOR_DRG_BG GColorVividCerulean
+#define COLOR_DRG_TEXT GColorBlack
 
 // Page-indicator dot colors.
 #define COLOR_DOT_INACTIVE GColorLightGray
 #define COLOR_DOT_ACTIVE GColorBlack
+
+// Button state-indicator dot color (INV on/off; DEG/RAD selector) — filled
+// when selected, a hollow ring of the same color otherwise.
+#define COLOR_STATE_DOT GColorBlack
 
 // ---------------------------------------------------------------------------
 // Static state
@@ -145,9 +161,13 @@ static void prv_get_button_colors(const CalcButton *btn, bool pressed,
       *bg = COLOR_MOD_ACTIVE_BG;
       *text = COLOR_MOD_ACTIVE_TEXT;
     } else {
-      *bg = COLOR_FUNC_BG;
-      *text = COLOR_FUNC_TEXT;
+      *bg = COLOR_MOD_BG;
+      *text = COLOR_MOD_TEXT;
     }
+    break;
+  case BUTTON_STYLE_DRG:
+    *bg = COLOR_DRG_BG;
+    *text = COLOR_DRG_TEXT;
     break;
   case BUTTON_STYLE_NONE:
   default:
@@ -173,24 +193,12 @@ static void prv_draw_chips(GContext *ctx, GRect display_rect) {
   if (!s_engine) return;
   const CalcFonts *fonts = calc_fonts_get();
 
-  // Chip text — concatenate active chips left-to-right.
-  // DEG/RAD only on scientific page; INV and M whenever active.
+  // Chip text — M whenever active (INV and DEG/RAD are shown on their own
+  // buttons via indicator dots, not here).
   char buf[16];
   buf[0] = '\0';
 
-  if (s_engine->page == CALC_PAGE_SCI) {
-    if (s_engine->deg_mode) {
-      strcat(buf, "DEG");
-    } else {
-      strcat(buf, "RAD");
-    }
-  }
-  if (s_engine->second_active) {
-    if (buf[0] != '\0') strcat(buf, " ");
-    strcat(buf, "INV");
-  }
   if (s_engine->memory != 0.0) {
-    if (buf[0] != '\0') strcat(buf, " ");
     strcat(buf, "M");
   }
 
@@ -289,6 +297,18 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
       GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
 }
 
+// A button state-indicator dot: always has a 1px black stroke; filled solid
+// black when active/selected, transparent (hollow ring) otherwise.
+static void prv_draw_state_dot(GContext *ctx, GPoint center, bool filled) {
+  if (filled) {
+    graphics_context_set_fill_color(ctx, COLOR_STATE_DOT);
+    graphics_fill_circle(ctx, center, STATE_DOT_RADIUS);
+  }
+  graphics_context_set_stroke_color(ctx, COLOR_STATE_DOT);
+  graphics_context_set_stroke_width(ctx, 1);
+  graphics_draw_circle(ctx, center, STATE_DOT_RADIUS);
+}
+
 static void prv_draw_buttons(GContext *ctx, GRect bounds) {
   if (!s_engine) return;
   int count = calc_buttons_get_count();
@@ -374,6 +394,22 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
         ctx, label, font,
         GRect(fill_rect.origin.x, text_y, fill_rect.size.w, text_h),
         GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+
+    // State-indicator dots, replacing the INV/DEG-RAD chips that used to
+    // live in the display area.
+    int dot_y = fill_rect.origin.y + STATE_DOT_TOP_MARGIN;
+    int center_x = fill_rect.origin.x + fill_rect.size.w / 2;
+    if (effective_action == CALC_ACTION_2ND_TOGGLE) {
+      // INV: one dot, filled when toggled on, hollow ring otherwise.
+      prv_draw_state_dot(ctx, GPoint(center_x, dot_y), second);
+    } else if (effective_action == CALC_ACTION_DRG_TOGGLE) {
+      // DEG/RAD: two dots, the active mode's dot is filled; the other is a
+      // hollow ring.
+      int deg_x = center_x - STATE_DOT_SPACING / 2;
+      int rad_x = center_x + STATE_DOT_SPACING / 2;
+      prv_draw_state_dot(ctx, GPoint(deg_x, dot_y), s_engine->deg_mode);
+      prv_draw_state_dot(ctx, GPoint(rad_x, dot_y), !s_engine->deg_mode);
+    }
   }
 }
 
