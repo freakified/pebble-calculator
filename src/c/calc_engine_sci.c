@@ -1,6 +1,6 @@
 #include "calc_engine.h"
 #include "calc_engine_internal.h"
-#include <math.h>
+#include "calc_math.h"
 
 #define PI_VALUE 3.14159265358979323846
 #define E_VALUE  2.71828182845904523536
@@ -57,27 +57,27 @@ static double prv_from_hms(double x) {
 
 static double prv_apply_unary(CalcAction action, double x, bool deg_mode) {
   switch (action) {
-    case CALC_ACTION_SIN:    return sin(prv_to_radians(x, deg_mode));
-    case CALC_ACTION_COS:    return cos(prv_to_radians(x, deg_mode));
-    case CALC_ACTION_TAN:    return tan(prv_to_radians(x, deg_mode));
+    case CALC_ACTION_SIN:    return calc_math_sin(prv_to_radians(x, deg_mode));
+    case CALC_ACTION_COS:    return calc_math_cos(prv_to_radians(x, deg_mode));
+    case CALC_ACTION_TAN:    return calc_math_tan(prv_to_radians(x, deg_mode));
     case CALC_ACTION_ASIN:
       if (x < -1.0 || x > 1.0) return ERROR_VALUE;
-      return prv_from_radians(asin(x), deg_mode);
+      return prv_from_radians(calc_math_asin(x), deg_mode);
     case CALC_ACTION_ACOS:
       if (x < -1.0 || x > 1.0) return ERROR_VALUE;
-      return prv_from_radians(acos(x), deg_mode);
-    case CALC_ACTION_ATAN:   return prv_from_radians(atan(x), deg_mode);
+      return prv_from_radians(calc_math_acos(x), deg_mode);
+    case CALC_ACTION_ATAN:   return prv_from_radians(calc_math_atan(x), deg_mode);
     case CALC_ACTION_LN:
       if (x <= 0.0) return ERROR_VALUE;
-      return log(x);
+      return calc_math_ln(x);
     case CALC_ACTION_LOG10:
       if (x <= 0.0) return ERROR_VALUE;
-      return log(x) / log(10.0);
-    case CALC_ACTION_EXP:    return exp(x);
-    case CALC_ACTION_POW10:  return pow(10.0, x);
+      return calc_math_log10(x);
+    case CALC_ACTION_EXP:    return calc_math_exp(x);
+    case CALC_ACTION_POW10:  return calc_math_pow10(x);
     case CALC_ACTION_SQRT:
       if (x < 0.0) return ERROR_VALUE;
-      return sqrt(x);
+      return calc_math_sqrt(x);
     case CALC_ACTION_SQUARE: return x * x;
     case CALC_ACTION_TO_HMS: return prv_to_hms(x);
     case CALC_ACTION_TO_H:   return prv_from_hms(x);

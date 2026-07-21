@@ -1,7 +1,7 @@
 #include "calc_engine.h"
 #include "calc_engine_internal.h"
 #include "calc_format.h"
-#include <math.h>
+#include "calc_math.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -84,8 +84,8 @@ double ce_apply_op(double left, CalcOp op, double right) {
     case CALC_OP_SUBTRACT: return left - right;
     case CALC_OP_MULTIPLY: return left * right;
     case CALC_OP_DIVIDE:   return right != 0.0 ? left / right : ERROR_VALUE;
-    case CALC_OP_POWER:    return pow(left, right);
-    case CALC_OP_NTHROOT:  return right != 0.0 ? pow(left, 1.0 / right) : ERROR_VALUE;
+    case CALC_OP_POWER:    return calc_math_pow(left, right);
+    case CALC_OP_NTHROOT:  return right != 0.0 ? calc_math_pow(left, 1.0 / right) : ERROR_VALUE;
     default:               return right;
   }
 }
