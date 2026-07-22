@@ -6,7 +6,7 @@
 
 // Button visual style
 typedef enum {
-  BUTTON_STYLE_NUMBER,    // Light gray bg, black text — digits and constants (π/e/±)
+  BUTTON_STYLE_NUMBER,    // Light gray bg, black text — digits and constants (π/e)
   BUTTON_STYLE_OPERATOR,  // Orange bg, white text — binary ops
   BUTTON_STYLE_ENTER,     // Special style for Enter/Equals
   BUTTON_STYLE_CLEAR,     // C / clear-X button: light gray bg, red text

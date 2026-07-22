@@ -12,16 +12,24 @@
 #define DISPLAY_PAD_X 6
 #define DISPLAY_PAD_Y 2
 
-// Page-indicator dot geometry — drawn in the display rect, top-left of the
-// text region, so it doesn't fight the right-aligned secondary text.
+// Page-indicator dot geometry — centered along the very top edge of the
+// screen, above the display text, so it doesn't fight the memory chip or
+// the right-aligned secondary text.
 #define PAGE_DOT_RADIUS 2
 #define PAGE_DOT_SPACING 7
+#define PAGE_DOT_TOP_Y 3
 
 // Button state-indicator dot geometry — drawn above the label on the INV
 // and DEG/RAD buttons in place of the display-area chips they replaced.
 #define STATE_DOT_RADIUS 2
 #define STATE_DOT_SPACING 8
 #define STATE_DOT_TOP_MARGIN 7
+
+// Roll direction indicator — a small filled triangle near the bottom of the
+// ROLL button, pointing the direction the stack rolls.
+#define STATE_TRIANGLE_HALF_W 7
+#define STATE_TRIANGLE_H 6
+#define STATE_TRIANGLE_BOTTOM_MARGIN 7
 
 // Colors
 #define COLOR_BG GColorBlack
@@ -41,18 +49,18 @@
 #define COLOR_ENT_BG GColorBlue
 #define COLOR_ENT_TEXT GColorWhite
 
-// Scientific function buttons (sin/log/etc.) and memory/stack ops.
-#define COLOR_FUNC_BG GColorCobaltBlue
+// Scientific unary functions (sin/log/etc.) and memory/stack ops.
+#define COLOR_FUNC_BG GColorMidnightGreen
 #define COLOR_FUNC_TEXT GColorWhite
 
-// 2nd modifier (INV) — yellow when inactive, army green when toggled on.
-#define COLOR_MOD_BG GColorYellow
+// 2nd modifier (INV) — tiffany blue when idle, yellow when toggled on.
+#define COLOR_MOD_BG GColorTiffanyBlue
 #define COLOR_MOD_TEXT GColorBlack
-#define COLOR_MOD_ACTIVE_BG GColorArmyGreen
+#define COLOR_MOD_ACTIVE_BG GColorYellow
 #define COLOR_MOD_ACTIVE_TEXT GColorBlack
 
 // DEG/RAD toggle.
-#define COLOR_DRG_BG GColorVividCerulean
+#define COLOR_DRG_BG GColorTiffanyBlue
 #define COLOR_DRG_TEXT GColorBlack
 
 // Page-indicator dot colors.
@@ -177,10 +185,11 @@ static void prv_get_button_colors(const CalcButton *btn, bool pressed,
   }
 }
 
-static void prv_draw_page_indicator(GContext *ctx, GRect display_rect,
+static void prv_draw_page_indicator(GContext *ctx, GRect bounds,
                                     int active_page) {
-  const int x_base = display_rect.origin.x + 4;
-  const int y = display_rect.origin.y + 8;
+  const int span = (CALC_PAGE_COUNT - 1) * PAGE_DOT_SPACING;
+  const int x_base = bounds.size.w / 2 - span / 2;
+  const int y = PAGE_DOT_TOP_Y;
   for (int i = 0; i < CALC_PAGE_COUNT; i++) {
     GColor c = (i == active_page) ? COLOR_DOT_ACTIVE : COLOR_DOT_INACTIVE;
     graphics_context_set_fill_color(ctx, c);
@@ -206,7 +215,7 @@ static void prv_draw_chips(GContext *ctx, GRect display_rect) {
 
   graphics_context_set_text_color(ctx, COLOR_DISPLAY_SEC);
   graphics_draw_text(ctx, buf, fonts->indicator,
-                     GRect(display_rect.origin.x + 2, display_rect.origin.y + 14,
+                     GRect(display_rect.origin.x + 2, display_rect.origin.y + 1,
                            60, 18),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 }
@@ -228,8 +237,9 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
   const int text_left = display_rect.origin.x;
   const int text_w = display_rect.size.w - DISPLAY_PAD_X;
 
-  // Page dots and chips occupy the left side of the display row.
-  prv_draw_page_indicator(ctx, display_rect, s_engine->page);
+  // Page dots sit centered along the very top edge; the memory chip occupies
+  // the left side of the secondary-line row.
+  prv_draw_page_indicator(ctx, bounds, s_engine->page);
   prv_draw_chips(ctx, display_rect);
 
   // Secondary line: Y register (RPN) or pending operand + operator (standard).
@@ -309,6 +319,34 @@ static void prv_draw_state_dot(GContext *ctx, GPoint center, bool filled) {
   graphics_draw_circle(ctx, center, STATE_DOT_RADIUS);
 }
 
+// A small filled direction triangle for the ROLL buttons, cached like the
+// backspace icon's GPath. Points are relative to a (0,0) vertical center;
+// gpath_move_to() below repositions it per draw.
+static GPathInfo s_triangle_down_info = {
+    .num_points = 3,
+    .points = (GPoint[]){{0, STATE_TRIANGLE_H},
+                        {-STATE_TRIANGLE_HALF_W, 0},
+                        {STATE_TRIANGLE_HALF_W, 0}},
+};
+static GPathInfo s_triangle_up_info = {
+    .num_points = 3,
+    .points = (GPoint[]){{0, -STATE_TRIANGLE_H},
+                        {-STATE_TRIANGLE_HALF_W, 0},
+                        {STATE_TRIANGLE_HALF_W, 0}},
+};
+static GPath *s_triangle_down_path = NULL;
+static GPath *s_triangle_up_path = NULL;
+
+static void prv_draw_state_triangle(GContext *ctx, GPoint center, bool down) {
+  GPath **path = down ? &s_triangle_down_path : &s_triangle_up_path;
+  if (!*path) {
+    *path = gpath_create(down ? &s_triangle_down_info : &s_triangle_up_info);
+  }
+  gpath_move_to(*path, center);
+  graphics_context_set_fill_color(ctx, GColorWhite);
+  gpath_draw_filled(ctx, *path);
+}
+
 static void prv_draw_buttons(GContext *ctx, GRect bounds) {
   if (!s_engine) return;
   int count = calc_buttons_get_count();
@@ -373,19 +411,39 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
     int text_h;
     int y_offset;
 
-    if (btn->style == BUTTON_STYLE_NUMBER && strlen(label) <= 1) {
-      // Single digits or short single-char labels (π, e, ±) get the big number font.
+    // CALC_ACTION_DIGIT_0 is 0 and DOT immediately follows DIGIT_9, so this
+    // range check covers exactly the digit and decimal-point keys.
+    bool is_digit_key = effective_action <= CALC_ACTION_DOT;
+    // INV/DEG/RAD/→HMS/CLST/ROLL read better a size down even though they'd
+    // fit at the big size — everything else falls back to the small font
+    // only if the big-font rendering would overflow the button, so any
+    // future long label (ENTER, DROP, LASTx, ...) self-adjusts without
+    // needing to be special-cased here.
+    bool force_small_font = effective_action == CALC_ACTION_2ND_TOGGLE ||
+                            effective_action == CALC_ACTION_DRG_TOGGLE ||
+                            effective_action == CALC_ACTION_TO_HMS ||
+                            effective_action == CALC_ACTION_STACK_CLEAR ||
+                            effective_action == CALC_ACTION_ROLL_DOWN ||
+                            effective_action == CALC_ACTION_ROLL_UP;
+    if (is_digit_key) {
+      // Digit and decimal-point keys get the big LECO number font.
       font = fonts->button_num;
       text_h = 32;
       y_offset = -5;
-    } else if (strlen(label) > 2) {
-      font = fonts->button_label_small;
-      text_h = 18;
-      y_offset = -2;
     } else {
-      font = fonts->button_label;
-      text_h = 24;
-      y_offset = -6;
+      const GRect measure_box = GRect(0, 0, 200, 40);
+      GSize label_sz = graphics_text_layout_get_content_size(
+          label, fonts->button_label, measure_box, GTextOverflowModeWordWrap,
+          GTextAlignmentCenter);
+      if (force_small_font || label_sz.w > fill_rect.size.w) {
+        font = fonts->button_label_small;
+        text_h = 18;
+        y_offset = -2;
+      } else {
+        font = fonts->button_label;
+        text_h = 24;
+        y_offset = -6;
+      }
     }
 
     // Center text in button
@@ -409,6 +467,15 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
       int rad_x = center_x + STATE_DOT_SPACING / 2;
       prv_draw_state_dot(ctx, GPoint(deg_x, dot_y), s_engine->deg_mode);
       prv_draw_state_dot(ctx, GPoint(rad_x, dot_y), !s_engine->deg_mode);
+    } else if (effective_action == CALC_ACTION_ROLL_DOWN ||
+              effective_action == CALC_ACTION_ROLL_UP) {
+      // ROLL: a small triangle near the bottom points the roll direction.
+      // The down/up chevrons aren't vertically symmetric around their
+      // anchor point, so each gets its own nudge to land in the same spot.
+      bool down = effective_action == CALC_ACTION_ROLL_DOWN;
+      int tri_y = fill_rect.origin.y + fill_rect.size.h - STATE_TRIANGLE_BOTTOM_MARGIN +
+                 (down ? -3 : 2);
+      prv_draw_state_triangle(ctx, GPoint(center_x, tri_y), down);
     }
   }
 }
