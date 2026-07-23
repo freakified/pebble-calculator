@@ -25,7 +25,10 @@
       "RPN_MODE",
       "HAPTIC_FEEDBACK",
       "KEEP_BACKLIGHT",
-      "DEG_MODE"
+      "SWIPE_PAGING",
+      "KEY_UP_ACTION",
+      "KEY_SELECT_ACTION",
+      "KEY_DOWN_ACTION"
     ],
     "resources": {
       "media": [

@@ -154,7 +154,8 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
       // origin button was un-highlighted during the drag (s_touch_inside false),
       // liftoff commits nothing at all — exactly the touch-cancel outcome.
       bool moving = (prv_now_ms() - s_last_motion_ms) <= SWIPE_DWELL_MS;
-      bool is_swipe = moving && adx >= SWIPE_THRESHOLD_PX &&
+      bool is_swipe = calc_settings_swipe_paging_enabled() && moving &&
+                      adx >= SWIPE_THRESHOLD_PX &&
                       adx * SWIPE_DOMINANCE_DEN >= ady * SWIPE_DOMINANCE_NUM;
       if (is_swipe) {
         // Swipe left (finger travels right→left) = next page, matching paged
@@ -184,25 +185,32 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
 // Physical button handlers (shortcuts)
 // ---------------------------------------------------------------------------
 
-// SELECT cycles through pages — the on-screen ± has moved to the scientific
-// page. Any in-flight touch gesture is cancelled: its origin index refers to
-// the OLD page's button table, so liftoff must not fire on the new page.
-static void prv_select_click(ClickRecognizerRef recognizer, void *context) {
-  prv_touch_cancel();
-  calc_engine_handle_action(&s_engine, CALC_ACTION_PAGE_NEXT);
+// The three physical buttons (UP/SELECT/DOWN) are user-configurable via Clay;
+// each dispatches whatever CalcAction the settings resolve to. BACK is left
+// untouched (default: exit app).
+static void prv_do_key_action(CalcAction action) {
+  if (action == CALC_ACTION_NOOP) {
+    return;
+  }
+  // Page changes must cancel any in-flight touch: its origin index refers to
+  // the OLD page's button table, so liftoff must not fire on the new page.
+  if (action == CALC_ACTION_PAGE_NEXT || action == CALC_ACTION_PAGE_PREV) {
+    prv_touch_cancel();
+  }
+  calc_engine_handle_action(&s_engine, action);
   calc_ui_mark_dirty();
 }
 
-// UP: swap X↔Y in RPN; negate in standard (rect basic page has no ± key).
+static void prv_select_click(ClickRecognizerRef recognizer, void *context) {
+  prv_do_key_action(calc_settings_key_select_action());
+}
+
 static void prv_up_click(ClickRecognizerRef recognizer, void *context) {
-  calc_engine_handle_action(&s_engine, s_engine.rpn_mode ? CALC_ACTION_SWAP
-                                                         : CALC_ACTION_NEGATE);
-  calc_ui_mark_dirty();
+  prv_do_key_action(calc_settings_key_up_action());
 }
 
 static void prv_down_click(ClickRecognizerRef recognizer, void *context) {
-  calc_engine_handle_action(&s_engine, CALC_ACTION_BACKSPACE);
-  calc_ui_mark_dirty();
+  prv_do_key_action(calc_settings_key_down_action());
 }
 
 static void prv_click_config_provider(void *context) {
