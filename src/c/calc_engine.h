@@ -93,6 +93,7 @@ typedef enum {
 
   // Paging
   CALC_ACTION_PAGE_NEXT,
+  CALC_ACTION_PAGE_PREV,
 
   // Sentinel for empty button slots
   CALC_ACTION_NOOP,

@@ -315,6 +315,11 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
     engine->second_active = false;
     return;
   }
+  if (action == CALC_ACTION_PAGE_PREV) {
+    engine->page = (engine->page + CALC_PAGE_COUNT - 1) % CALC_PAGE_COUNT;
+    engine->second_active = false;
+    return;
+  }
 
   // DEG⇄RAD is a mode flip, not a computation — like paging, it leaves the
   // entry, tape, and INV state untouched.
