@@ -14,9 +14,12 @@ static Layer *s_ui_layer;
 static CalcEngine s_engine;
 
 // Touch gesture state: the button under the initial touchdown stays the
-// gesture's target for its whole lifetime. Dragging off it cancels the press
-// visually, but dragging back re-arms it (matching platform button behavior);
-// only liftoff while inside fires the action.
+// gesture's target for its whole lifetime, and stays visually pressed the whole
+// time — even while the finger is dragged off to a cancel position (matching
+// Apple's calculator, so you can confirm which key you hit before committing).
+// Off the button it shows a muted "cancel" highlight instead of the committing
+// one. s_touch_inside tracks whether liftoff would land on the button; only
+// liftoff while inside fires the action.
 static int s_touch_button = -1;   // origin button of the current gesture
 static bool s_touch_inside = false;
 
@@ -28,7 +31,7 @@ static void prv_touch_cancel(void) {
   if (s_touch_button >= 0) {
     s_touch_button = -1;
     s_touch_inside = false;
-    calc_ui_set_pressed(-1);
+    calc_ui_set_pressed(-1, false);
   }
 }
 
@@ -48,7 +51,7 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
     if (idx >= 0) {
       s_touch_button = idx;
       s_touch_inside = true;
-      calc_ui_set_pressed(idx);
+      calc_ui_set_pressed(idx, false);
       if (calc_settings_haptic_enabled()) {
         vibes_enqueue_custom_pattern(s_vibe_pattern);
       }
@@ -66,9 +69,11 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
         GRect slop = grect_inset(btn->bounds, GEdgeInsets(-TOUCH_SLOP_PX));
         inside = grect_contains_point(&slop, &p);
       }
+      // The button stays pressed either way; crossing the boundary only swaps
+      // the committing highlight for the muted cancel highlight (and back).
       if (inside != s_touch_inside) {
         s_touch_inside = inside;
-        calc_ui_set_pressed(inside ? s_touch_button : -1);
+        calc_ui_set_pressed(s_touch_button, !inside);
         calc_ui_mark_dirty();
       }
     }
@@ -85,7 +90,7 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
       }
       s_touch_button = -1;
       s_touch_inside = false;
-      calc_ui_set_pressed(-1);
+      calc_ui_set_pressed(-1, false);
       calc_ui_mark_dirty();
     }
     break;

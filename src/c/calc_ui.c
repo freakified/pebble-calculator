@@ -78,6 +78,9 @@
 static Layer *s_ui_layer = NULL;
 static CalcEngine *s_engine = NULL;
 static int s_pressed_index = -1;
+// When the pressed button's gesture has been dragged to a cancel position, it
+// stays highlighted but in a muted grey rather than the committing white.
+static bool s_pressed_cancel = false;
 
 // ---------------------------------------------------------------------------
 // Drawing helpers
@@ -136,9 +139,10 @@ static const char *prv_shorten_repeating(const char *str, char *buf,
 }
 
 static void prv_get_button_colors(const CalcButton *btn, bool pressed,
-                                  bool second_active, GColor *bg, GColor *text) {
+                                  bool cancel, bool second_active, GColor *bg,
+                                  GColor *text) {
   if (pressed) {
-    *bg = GColorWhite;
+    *bg = cancel ? GColorLightGray : GColorWhite;
     *text = GColorBlack;
     return;
   }
@@ -367,8 +371,9 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
     }
 
     bool pressed = (i == s_pressed_index);
+    bool cancel = pressed && s_pressed_cancel;
     GColor bg, text;
-    prv_get_button_colors(btn, pressed, second, &bg, &text);
+    prv_get_button_colors(btn, pressed, cancel, second, &bg, &text);
 
     // Fill button background
     graphics_context_set_fill_color(ctx, bg);
@@ -517,7 +522,10 @@ void calc_ui_destroy(Layer *layer) {
   }
 }
 
-void calc_ui_set_pressed(int button_index) { s_pressed_index = button_index; }
+void calc_ui_set_pressed(int button_index, bool cancel) {
+  s_pressed_index = button_index;
+  s_pressed_cancel = cancel;
+}
 
 void calc_ui_set_engine(CalcEngine *engine) { s_engine = engine; }
 
