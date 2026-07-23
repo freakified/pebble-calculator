@@ -3,6 +3,9 @@
 build
 .lock-waf*
 
+# Host test-suite build output
+build-test
+
 # Ignore linked files/directories
 waf
 tools

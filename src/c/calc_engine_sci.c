@@ -9,6 +9,18 @@ static double prv_to_radians(double x, bool deg_mode) {
   return deg_mode ? x * (PI_VALUE / 180.0) : x;
 }
 
+// A trig result within a hair of zero is argument-reduction noise, not a real
+// value: the irrational pi/2, pi, ... aren't exactly representable, so e.g.
+// cos(90 deg) comes out ~4.6e-17 instead of 0. Snap those to exactly 0. The
+// threshold sits ~4 orders of magnitude above the observed noise floor
+// (~2.5e-16) and ~3 below the smallest trig output a user could actually
+// produce (sin of the smallest enterable angle is ~1e-9), so no legitimate
+// result is lost. Only sin/cos/tan route through here — arithmetic and EE
+// entry keep full range, so a deliberately tiny value like 1e-20 is untouched.
+static double prv_snap_zero(double v) {
+  return (v < 0.0 ? -v : v) < 1e-12 ? 0.0 : v;
+}
+
 static double prv_from_radians(double x, bool deg_mode) {
   return deg_mode ? x * (180.0 / PI_VALUE) : x;
 }
@@ -57,9 +69,17 @@ static double prv_from_hms(double x) {
 
 static double prv_apply_unary(CalcAction action, double x, bool deg_mode) {
   switch (action) {
-    case CALC_ACTION_SIN:    return calc_math_sin(prv_to_radians(x, deg_mode));
-    case CALC_ACTION_COS:    return calc_math_cos(prv_to_radians(x, deg_mode));
-    case CALC_ACTION_TAN:    return calc_math_tan(prv_to_radians(x, deg_mode));
+    case CALC_ACTION_SIN:    return prv_snap_zero(calc_math_sin(prv_to_radians(x, deg_mode)));
+    case CALC_ACTION_COS:    return prv_snap_zero(calc_math_cos(prv_to_radians(x, deg_mode)));
+    case CALC_ACTION_TAN: {
+      // tan is undefined at its asymptotes (90, 270, ... degrees). The residue
+      // in cos means it lands near zero, not exactly zero, so calc_math_tan
+      // would return a huge-but-finite number (~2e16) instead of erroring.
+      // Snap the cosine first: if it's zero, we're on an asymptote.
+      double rad = prv_to_radians(x, deg_mode);
+      if (prv_snap_zero(calc_math_cos(rad)) == 0.0) return ERROR_VALUE;
+      return prv_snap_zero(calc_math_tan(rad));
+    }
     case CALC_ACTION_ASIN:
       if (x < -1.0 || x > 1.0) return ERROR_VALUE;
       return prv_from_radians(calc_math_asin(x), deg_mode);
