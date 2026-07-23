@@ -46,6 +46,17 @@ typedef enum {
   KEYFUNC_2ND_TOGGLE = 18,
   KEYFUNC_PI = 19,
   KEYFUNC_E = 20,
+  KEYFUNC_ADD = 21,
+  KEYFUNC_SUBTRACT = 22,
+  KEYFUNC_MULTIPLY = 23,
+  KEYFUNC_DIVIDE = 24,
+  KEYFUNC_SQRT = 25,
+  KEYFUNC_SQUARE = 26,
+  KEYFUNC_RECIP = 27,       // 1/x
+  KEYFUNC_STACK_CLEAR = 28, // RPN: clear all 4 registers
+  KEYFUNC_PERCENT = 29,
+  KEYFUNC_EE = 30,          // scientific-notation exponent entry
+  KEYFUNC_MAX_ = KEYFUNC_EE, // keep in sync with the last member (range checks)
 } KeyFunc;
 
 // Restore persisted state into the engine and the module-private prefs.

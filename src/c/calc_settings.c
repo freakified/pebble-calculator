@@ -43,6 +43,16 @@ static CalcAction prv_resolve_keyfunc(int kf) {
   case KEYFUNC_2ND_TOGGLE: return CALC_ACTION_2ND_TOGGLE;
   case KEYFUNC_PI:         return CALC_ACTION_PI;
   case KEYFUNC_E:          return CALC_ACTION_E;
+  case KEYFUNC_ADD:        return CALC_ACTION_ADD;
+  case KEYFUNC_SUBTRACT:   return CALC_ACTION_SUBTRACT;
+  case KEYFUNC_MULTIPLY:   return CALC_ACTION_MULTIPLY;
+  case KEYFUNC_DIVIDE:     return CALC_ACTION_DIVIDE;
+  case KEYFUNC_SQRT:       return CALC_ACTION_SQRT;
+  case KEYFUNC_SQUARE:     return CALC_ACTION_SQUARE;
+  case KEYFUNC_RECIP:      return CALC_ACTION_RECIP;
+  case KEYFUNC_STACK_CLEAR: return CALC_ACTION_STACK_CLEAR;
+  case KEYFUNC_PERCENT:    return CALC_ACTION_PERCENT;
+  case KEYFUNC_EE:         return CALC_ACTION_EE;
   case KEYFUNC_NONE:
   default:                 return CALC_ACTION_NOOP;
   }
@@ -115,19 +125,19 @@ void calc_settings_load(CalcEngine *engine) {
   // Clay's string select values as garbage ints.
   if (persist_exists(PERSIST_KEY_ACTION_UP)) {
     int v = persist_read_int(PERSIST_KEY_ACTION_UP);
-    if (v >= KEYFUNC_NONE && v <= KEYFUNC_E) {
+    if (v >= KEYFUNC_NONE && v <= KEYFUNC_MAX_) {
       s_key_up = v;
     }
   }
   if (persist_exists(PERSIST_KEY_ACTION_SELECT)) {
     int v = persist_read_int(PERSIST_KEY_ACTION_SELECT);
-    if (v >= KEYFUNC_NONE && v <= KEYFUNC_E) {
+    if (v >= KEYFUNC_NONE && v <= KEYFUNC_MAX_) {
       s_key_select = v;
     }
   }
   if (persist_exists(PERSIST_KEY_ACTION_DOWN)) {
     int v = persist_read_int(PERSIST_KEY_ACTION_DOWN);
-    if (v >= KEYFUNC_NONE && v <= KEYFUNC_E) {
+    if (v >= KEYFUNC_NONE && v <= KEYFUNC_MAX_) {
       s_key_down = v;
     }
   }
