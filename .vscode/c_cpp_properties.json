@@ -1,0 +1,40 @@
+{
+    "version": 4,
+    "configurations": [
+        {
+            "name": "Mac",
+            "compilerPath": "${userHome}/Library/Application Support/Pebble SDK/SDKs/current/toolchain/arm-none-eabi/bin/arm-none-eabi-gcc",
+            "compilerArgs": [
+                "-mcpu=cortex-m3",
+                "-mthumb"
+            ],
+            "cStandard": "c99",
+            "intelliSenseMode": "gcc-arm",
+            "includePath": [
+                "${workspaceFolder}/src/c/**",
+                "${workspaceFolder}/build/include",
+                "${workspaceFolder}/build/emery",
+                "${userHome}/Library/Application Support/Pebble SDK/SDKs/current/sdk-core/pebble/emery/include"
+            ],
+            "defines": [
+                "RELEASE",
+                "PBL_PLATFORM_EMERY",
+                "PBL_COLOR",
+                "PBL_RECT",
+                "PBL_MICROPHONE",
+                "PBL_SMARTSTRAP",
+                "PBL_HEALTH",
+                "PBL_SMARTSTRAP_POWER",
+                "PBL_COMPASS",
+                "PBL_TOUCH",
+                "PBL_RGB_BACKLIGHT",
+                "PBL_SPEAKER",
+                "PBL_DISPLAY_WIDTH=200",
+                "PBL_DISPLAY_HEIGHT=228",
+                "PBL_SDK_3",
+                "_TIME_H_",
+                "time_t=long"
+            ]
+        }
+    ]
+}
