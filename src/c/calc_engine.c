@@ -385,21 +385,26 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
       goto done;
     }
 
-    // Not entering, no error
+    // Not entering, no error. Backspace and Clear behave identically here in
+    // both modes: a first press does the "small" clear (CLx / C, preserving
+    // memory), a second press escalates to AC (everything, including memory).
+    // just_cleared stays set through AC so the button rests on "AC" — once
+    // everything's gone, C and AC are the same, so flipping back to "C" would
+    // just be a lie.
     if (engine->rpn_mode) {
       if (engine->just_cleared) {
         // AC: clear full stack and memory, mirroring standard mode's
-        // C→AC (which wipes the memory register on the second press).
+        // CLx→AC (which wipes the memory register on the second press).
         for (int i = 0; i < 4; i++) engine->stack[i] = 0.0;
         engine->memory = 0.0;
         engine->last_x = 0.0;
         ce_clear_entry(engine);
-        engine->just_cleared = false;
+        engine->just_cleared = true;
       } else {
         ce_rpn_clear_x(engine);
         engine->just_cleared = true;
       }
-    } else if (resolved == CALC_ACTION_CLEAR) {
+    } else {
       int  page = engine->page;
       bool deg  = engine->deg_mode;
       if (engine->just_cleared) {
@@ -407,6 +412,7 @@ void calc_engine_handle_action(CalcEngine *engine, CalcAction action) {
         calc_engine_init(engine);
         engine->page = page;
         engine->deg_mode = deg;
+        engine->just_cleared = true;
       } else {
         // C: preserve memory
         double mem = engine->memory;

@@ -14,9 +14,9 @@
 #endif
 
 #if CALC_ROUND_LAYOUT
-#define EXTRA_BASIC_STYLE BUTTON_STYLE_NUMBER
-#define EXTRA_BASIC_ACTION CALC_ACTION_NEGATE
-#define EXTRA_BASIC_LABEL "+/-"
+#define EXTRA_BASIC_STYLE BUTTON_STYLE_OPERATOR
+#define EXTRA_BASIC_ACTION CALC_ACTION_PERCENT
+#define EXTRA_BASIC_LABEL "%"
 #else
 #define EXTRA_BASIC_STYLE BUTTON_STYLE_NONE
 #define EXTRA_BASIC_ACTION CALC_ACTION_NOOP
@@ -59,7 +59,7 @@ static CalcButton s_buttons[CALC_PAGE_COUNT][CALC_BUTTON_COUNT] = {
     { .label = "", .action = CALC_ACTION_ADD, .rpn_action = CALC_ACTION_ADD, .style = BUTTON_STYLE_OPERATOR, .icon = CALC_ICON_PLUS },
     // [16] C/DEL
     { .label = "C", .action = CALC_ACTION_CLEAR, .rpn_action = CALC_ACTION_CLEAR, .style = BUTTON_STYLE_CLEAR, .icon = CALC_ICON_NONE },
-    // [17] round-only top-right ±
+    // [17] round-only top-right slot (%)
     { .label = EXTRA_BASIC_LABEL, .action = EXTRA_BASIC_ACTION, .rpn_action = EXTRA_BASIC_ACTION, .style = EXTRA_BASIC_STYLE, .icon = CALC_ICON_NONE },
   },
 
@@ -218,28 +218,45 @@ void calc_buttons_init(void) {
   prv_set_bounds(CALC_PAGE_BASIC, 14, prv_round_basic_cell(2, 3)); // =
 
   // Scientific page: keep the existing row-major order in the same five-slot
-  // round rows, with C in the left rail. The bottom-right rail cell is
-  // clipped by the round bezel (the basic page leaves the bottom rails empty
-  // for the same reason), so the last key (%) parks on the left rail instead.
+  // round rows, with C in the left rail. % (index 15) is not shown here on
+  // round — it lives on the basic page's top-right slot instead — so it is
+  // left unpositioned (zero bounds). That also sidesteps the bottom-right
+  // rail cell being clipped by the round bezel, which is why % used to park
+  // on the left rail.
   s_buttons[CALC_PAGE_SCI][CALC_BUTTON_INDEX_CL].bounds =
       prv_round_left_rail_cell(0);
-  for (int i = 0; i < 16; i++) {
+  for (int i = 0; i < 15; i++) {
     int row = i / 4;
     int col = i % 4;
-    GRect cell = (i == 15) ? prv_round_left_rail_cell(1)
-                           : prv_round_five_slot_cell(col + 1, row);
-    prv_set_bounds(CALC_PAGE_SCI, i, cell);
+    prv_set_bounds(CALC_PAGE_SCI, i, prv_round_five_slot_cell(col + 1, row));
   }
+  // Symmetry: →HMS drops to the left rail under C, and y^x moves up into the
+  // right-rail slot →HMS vacated. Both rails then carry two keys on rows 0-1
+  // (C/→HMS on the left, ±/y^x on the right).
+  prv_set_bounds(CALC_PAGE_SCI, 7, prv_round_left_rail_cell(1));   // →HMS
+  prv_set_bounds(CALC_PAGE_SCI, 11, prv_round_right_rail_cell(1)); // y^x
 
-  // Memory/RPN page: preserve the row-major page table in a round-safe,
-  // five-slot grid.
+  // Memory/RPN page. Row 0 uses the full five-slot rail row for the memory
+  // keys. The RPN stack ops sit in the three center columns on rows 1-2 with
+  // the rails left empty, which keeps DROP off the crowded ROLL/ROLL/SWAP row
+  // and pairs it with CLST/LASTx on its own line:
+  //   C   M+  M−  MR  MC
+  //       ROLL ROLL SWAP
+  //       DROP CLST LASTx
   s_buttons[CALC_PAGE_MEM][CALC_BUTTON_INDEX_CL].bounds =
       prv_round_left_rail_cell(0);
-  for (int i = 0; i < 16; i++) {
-    int row = i / 4;
-    int col = i % 4;
-    prv_set_bounds(CALC_PAGE_MEM, i, prv_round_five_slot_cell(col + 1, row));
-  }
+  prv_set_bounds(CALC_PAGE_MEM, 0, prv_round_basic_cell(0, 0));      // M+
+  prv_set_bounds(CALC_PAGE_MEM, 1, prv_round_basic_cell(1, 0));      // M−
+  prv_set_bounds(CALC_PAGE_MEM, 2, prv_round_basic_cell(2, 0));      // MR
+  prv_set_bounds(CALC_PAGE_MEM, 3, prv_round_right_rail_cell(0));    // MC
+
+  prv_set_bounds(CALC_PAGE_MEM, 4, prv_round_basic_cell(0, 1));      // ROLL
+  prv_set_bounds(CALC_PAGE_MEM, 5, prv_round_basic_cell(1, 1));      // ROLL
+  prv_set_bounds(CALC_PAGE_MEM, 6, prv_round_basic_cell(2, 1));      // SWAP
+
+  prv_set_bounds(CALC_PAGE_MEM, 7, prv_round_basic_cell(0, 2));      // DROP
+  prv_set_bounds(CALC_PAGE_MEM, 8, prv_round_basic_cell(1, 2));      // CLST
+  prv_set_bounds(CALC_PAGE_MEM, 9, prv_round_basic_cell(2, 2));      // LASTx
 #else
   for (int row = 0; row < CALC_GRID_ROWS; row++) {
     for (int col = 0; col < CALC_GRID_COLS; col++) {

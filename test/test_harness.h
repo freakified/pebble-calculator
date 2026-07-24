@@ -78,6 +78,12 @@ static inline int report(void) {
     check_eq(__FILE__, __LINE__, _b, (want));               \
   } while (0)
 
+// The sticky "already cleared once" flag that drives the C/CLx -> AC escalation
+// and the button's "AC" label. want is a bool.
+#define ASSERT_JUST_CLEARED(e, want)                                    \
+  check_eq(__FILE__, __LINE__, (e)->just_cleared ? "true" : "false",    \
+           (want) ? "true" : "false")
+
 // Standard-mode secondary line (pending op-stack, or the post-'=' tape).
 #define ASSERT_SECONDARY(e, want)                           \
   do {                                                      \
@@ -170,6 +176,8 @@ static inline void feed_actions(CalcEngine *e, const CalcAction *acts, int n) {
 #define DIV     CALC_ACTION_DIVIDE
 #define NEGATE  CALC_ACTION_NEGATE
 #define EQUALS  CALC_ACTION_EQUALS
+#define BACKSPACE CALC_ACTION_BACKSPACE
+#define CLEAR     CALC_ACTION_CLEAR
 #define ENTER   CALC_ACTION_ENTER
 #define SWAP    CALC_ACTION_SWAP
 #define DROP    CALC_ACTION_DROP

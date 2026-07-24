@@ -1,7 +1,3 @@
-// Curated functions assignable to the physical buttons. The `value`s MUST match
-// the KeyFunc enum in src/c/calc_settings.h (append-only; never reorder/reuse).
-// Options are grouped into <optgroup>s for readability; the grouping is purely
-// cosmetic and has no effect on the stored value.
 var BUTTON_ACTION_OPTIONS = [
   { "label": "None (disabled)", "value": 0 },
   {
@@ -14,7 +10,7 @@ var BUTTON_ACTION_OPTIONS = [
     ]
   },
   {
-    "label": "Arithmetic",
+    "label": "Basic Arithmetic",
     "value": [
       { "label": "+ Add", "value": 21 },
       { "label": "− Subtract", "value": 22 },
@@ -53,7 +49,7 @@ var BUTTON_ACTION_OPTIONS = [
     ]
   },
   {
-    "label": "RPN Mode Only",
+    "label": "RPN Only",
     "value": [
       { "label": "Enter (RPN push)", "value": 7 },
       { "label": "Swap X↔Y", "value": 8 },
@@ -117,7 +113,7 @@ module.exports = [
         "messageKey": "SWIPE_PAGING",
         "label": "Swipe to Change Pages",
         "defaultValue": true,
-        "description": "If enabled, swipe left/right on the screen to move between pages. Disable if you keep changing pages by accident."
+        "description": "Allows you to swipe left or right on the screen to change pages."
       }
     ]
   },
@@ -130,7 +126,7 @@ module.exports = [
       },
       {
         "type": "text",
-        "defaultValue": "Assign a function to each physical button. The Back button always exits the app."
+        "defaultValue": "Assign your favorite actions to the physical buttons! (The back button always exits.)"
       },
       {
         "type": "select",

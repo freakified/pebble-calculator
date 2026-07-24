@@ -100,6 +100,45 @@ static void test_infix_clear(CalcEngine *e) {
   feed(e, "c"); FEED(e, M_RECALL);      ASSERT_DISPLAY(e, "5");
   reset_std(e); feed(e, "5+0="); FEED(e, M_PLUS);
   feed(e, "cc"); FEED(e, M_RECALL);     ASSERT_DISPLAY(e, "0");
+
+  // Backspace and Clear are interchangeable once the entry is committed: an
+  // idle Backspace escalates C -> AC just like a second Clear does.
+  reset_std(e); feed(e, "5+0="); FEED(e, M_PLUS);
+  feed(e, "<<"); FEED(e, M_RECALL);     ASSERT_DISPLAY(e, "0"); // < then < = C then AC
+
+  // just_cleared is sticky through AC: once everything's gone the button stays
+  // on "AC" rather than flip-flopping back to "C" on a third press.
+  reset_std(e); feed(e, "5+0=");
+  ASSERT_JUST_CLEARED(e, false);
+  feed(e, "c");   ASSERT_JUST_CLEARED(e, true);  // C
+  feed(e, "c");   ASSERT_JUST_CLEARED(e, true);  // AC (was false before the fix)
+  feed(e, "c");   ASSERT_JUST_CLEARED(e, true);  // stays AC
+  // Any non-clear action releases the flag, so C is offered again next time.
+  FEED(e, DIGIT_7); ASSERT_JUST_CLEARED(e, false);
+}
+
+// ===========================================================================
+// RPN clear (CLx -> AC)
+// ===========================================================================
+
+static void test_rpn_clear(CalcEngine *e) {
+  group("rpn clear (CLx / AC)");
+
+  // While mid-entry, Backspace just trims digits; it only reaches the CLx/AC
+  // path once the entry is committed (here via ENTER, which leaves X = Y = 3).
+  reset_rpn(e); FEED(e, DIGIT_2, ENTER, DIGIT_3, ENTER);
+  ASSERT_DISPLAY(e, "3"); ASSERT_STACK(e, 2, "3");
+  FEED(e, BACKSPACE);                                  // CLx: X only, Y survives
+  ASSERT_DISPLAY(e, "0"); ASSERT_STACK(e, 2, "3"); ASSERT_JUST_CLEARED(e, true);
+  FEED(e, BACKSPACE);                                  // AC: whole stack
+  ASSERT_DISPLAY(e, "0"); ASSERT_STACK(e, 2, "0"); ASSERT_JUST_CLEARED(e, true);
+  FEED(e, BACKSPACE);                                  // stays AC
+  ASSERT_JUST_CLEARED(e, true);
+
+  // AC also wipes the memory register (CLx alone leaves it alone).
+  reset_rpn(e); FEED(e, DIGIT_9, M_PLUS, ENTER);       // memory = 9
+  FEED(e, BACKSPACE, BACKSPACE, M_RECALL);             // CLx then AC
+  ASSERT_DISPLAY(e, "0");
 }
 
 // ===========================================================================
@@ -389,6 +428,7 @@ int main(void) {
   test_rpn_stack_ops(e);
   test_rpn_chains(e);
   test_rpn_errors(e);
+  test_rpn_clear(e);
 
   // Formatting
   test_format(e);
