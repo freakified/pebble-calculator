@@ -203,7 +203,8 @@ static void prv_draw_page_indicator(GContext *ctx, GRect bounds,
 }
 
 static void prv_draw_chips(GContext *ctx, GRect display_rect) {
-  if (!s_engine) return;
+  if (!s_engine)
+    return;
   const CalcFonts *fonts = calc_fonts_get();
 
   // Chip text — M whenever active (INV and DEG/RAD are shown on their own
@@ -215,13 +216,14 @@ static void prv_draw_chips(GContext *ctx, GRect display_rect) {
     strcat(buf, "M");
   }
 
-  if (buf[0] == '\0') return;
+  if (buf[0] == '\0')
+    return;
 
   graphics_context_set_text_color(ctx, COLOR_DISPLAY_SEC);
-  graphics_draw_text(ctx, buf, fonts->indicator,
-                     GRect(display_rect.origin.x + 2, display_rect.origin.y + 1,
-                           60, 18),
-                     GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+  graphics_draw_text(
+      ctx, buf, fonts->indicator,
+      GRect(display_rect.origin.x + 2, display_rect.origin.y + 1, 60, 18),
+      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 }
 
 static void prv_draw_display(GContext *ctx, GRect bounds) {
@@ -232,8 +234,8 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
   // it. Text occupies the layout-provided display rect, right-aligned.
   graphics_context_set_fill_color(ctx, COLOR_DISPLAY_BG);
   graphics_fill_rect(
-      ctx, GRect(0, 0, bounds.size.w, calc_buttons_get_display_band_height()), 0,
-      GCornerNone);
+      ctx, GRect(0, 0, bounds.size.w, calc_buttons_get_display_band_height()),
+      0, GCornerNone);
 
   const CalcFonts *fonts = calc_fonts_get();
 
@@ -288,8 +290,8 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
                                         CALC_X_MAX_DIGITS_LECO);
       if (x_display != x_str) {
         sz = graphics_text_layout_get_content_size(
-            x_display, fonts->x_register, measure_box, GTextOverflowModeWordWrap,
-            GTextAlignmentLeft);
+            x_display, fonts->x_register, measure_box,
+            GTextOverflowModeWordWrap, GTextAlignmentLeft);
       }
       use_compact_font = sz.w > text_w;
       if (use_compact_font) {
@@ -299,8 +301,9 @@ static void prv_draw_display(GContext *ctx, GRect bounds) {
       }
     }
   }
-  GFont x_font = use_compact_font ? fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD)
-                                  : fonts->x_register;
+  GFont x_font = use_compact_font
+                     ? fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD)
+                     : fonts->x_register;
   graphics_context_set_text_color(ctx, s_engine->error ? GColorDarkCandyAppleRed
                                                        : COLOR_DISPLAY_TEXT);
   graphics_draw_text(
@@ -329,14 +332,14 @@ static void prv_draw_state_dot(GContext *ctx, GPoint center, bool filled) {
 static GPathInfo s_triangle_down_info = {
     .num_points = 3,
     .points = (GPoint[]){{0, STATE_TRIANGLE_H},
-                        {-STATE_TRIANGLE_HALF_W, 0},
-                        {STATE_TRIANGLE_HALF_W, 0}},
+                         {-STATE_TRIANGLE_HALF_W, 0},
+                         {STATE_TRIANGLE_HALF_W, 0}},
 };
 static GPathInfo s_triangle_up_info = {
     .num_points = 3,
     .points = (GPoint[]){{0, -STATE_TRIANGLE_H},
-                        {-STATE_TRIANGLE_HALF_W, 0},
-                        {STATE_TRIANGLE_HALF_W, 0}},
+                         {-STATE_TRIANGLE_HALF_W, 0},
+                         {STATE_TRIANGLE_HALF_W, 0}},
 };
 static GPath *s_triangle_down_path = NULL;
 static GPath *s_triangle_up_path = NULL;
@@ -352,7 +355,8 @@ static void prv_draw_state_triangle(GContext *ctx, GPoint center, bool down) {
 }
 
 static void prv_draw_buttons(GContext *ctx, GRect bounds) {
-  if (!s_engine) return;
+  if (!s_engine)
+    return;
   int count = calc_buttons_get_count();
   bool rpn = s_engine->rpn_mode;
   bool second = s_engine->second_active;
@@ -362,11 +366,13 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
 
   for (int i = 0; i < count; i++) {
     const CalcButton *btn = calc_buttons_get(page, i);
-    if (!btn) continue;
+    if (!btn)
+      continue;
 
     // Skip buttons that are NONE-styled or NOOP for current mode (empty slots).
     CalcAction effective_action = calc_button_get_action(btn, rpn);
-    if (btn->style == BUTTON_STYLE_NONE || effective_action == CALC_ACTION_NOOP) {
+    if (btn->style == BUTTON_STYLE_NONE ||
+        effective_action == CALC_ACTION_NOOP) {
       continue;
     }
 
@@ -388,7 +394,8 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
         const char *clabel = s_engine->just_cleared ? "AC" : "C";
         int text_y = fill_rect.origin.y + (fill_rect.size.h - 24) / 2 - 6;
         graphics_context_set_text_color(ctx, text);
-        graphics_draw_text(ctx, clabel, fonts->button_label,
+        graphics_draw_text(
+            ctx, clabel, fonts->button_label,
             GRect(fill_rect.origin.x, text_y, fill_rect.size.w, 24),
             GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
       }
@@ -452,7 +459,8 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
     }
 
     // Center text in button
-    int text_y = fill_rect.origin.y + (fill_rect.size.h - text_h) / 2 + y_offset;
+    int text_y =
+        fill_rect.origin.y + (fill_rect.size.h - text_h) / 2 + y_offset;
     graphics_draw_text(
         ctx, label, font,
         GRect(fill_rect.origin.x, text_y, fill_rect.size.w, text_h),
@@ -473,13 +481,13 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
       prv_draw_state_dot(ctx, GPoint(deg_x, dot_y), s_engine->deg_mode);
       prv_draw_state_dot(ctx, GPoint(rad_x, dot_y), !s_engine->deg_mode);
     } else if (effective_action == CALC_ACTION_ROLL_DOWN ||
-              effective_action == CALC_ACTION_ROLL_UP) {
+               effective_action == CALC_ACTION_ROLL_UP) {
       // ROLL: a small triangle near the bottom points the roll direction.
       // The down/up chevrons aren't vertically symmetric around their
       // anchor point, so each gets its own nudge to land in the same spot.
       bool down = effective_action == CALC_ACTION_ROLL_DOWN;
-      int tri_y = fill_rect.origin.y + fill_rect.size.h - STATE_TRIANGLE_BOTTOM_MARGIN +
-                 (down ? -3 : 2);
+      int tri_y = fill_rect.origin.y + fill_rect.size.h -
+                  STATE_TRIANGLE_BOTTOM_MARGIN + (down ? -3 : 2);
       prv_draw_state_triangle(ctx, GPoint(center_x, tri_y), down);
     }
   }

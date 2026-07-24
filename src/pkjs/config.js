@@ -132,7 +132,7 @@ module.exports = [
         "type": "select",
         "messageKey": "KEY_UP_ACTION",
         "label": "Top Button",
-        "defaultValue": 5,
+        "defaultValue": 3,
         "options": BUTTON_ACTION_OPTIONS
       },
       {
@@ -146,7 +146,7 @@ module.exports = [
         "type": "select",
         "messageKey": "KEY_DOWN_ACTION",
         "label": "Bottom Button",
-        "defaultValue": 3,
+        "defaultValue": 5,
         "options": BUTTON_ACTION_OPTIONS
       }
     ]

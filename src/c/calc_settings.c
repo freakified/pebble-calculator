@@ -3,9 +3,9 @@
 static bool s_haptic_feedback = true;
 static bool s_keep_backlight = false;
 static bool s_swipe_paging = true;
-static int s_key_up = KEYFUNC_NEGATE;
+static int s_key_up = KEYFUNC_BACKSPACE;
 static int s_key_select = KEYFUNC_PAGE_NEXT;
-static int s_key_down = KEYFUNC_BACKSPACE;
+static int s_key_down = KEYFUNC_NEGATE;
 
 bool calc_settings_haptic_enabled(void) {
   return s_haptic_feedback;
