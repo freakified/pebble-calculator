@@ -101,8 +101,8 @@ static CalcGestureHint s_hint = CALC_HINT_NONE;
 // Page names, shown by the page-flip hint.
 static const char *const s_page_titles[CALC_PAGE_COUNT] = {
     [CALC_PAGE_BASIC] = "BASIC",
-    [CALC_PAGE_SCI] = "SCI",
-    [CALC_PAGE_MEM] = "MEM",
+    [CALC_PAGE_SCI] = "SCIENTIFIC",
+    [CALC_PAGE_MEM] = "EXTRA",
 };
 
 // ---------------------------------------------------------------------------
@@ -578,12 +578,12 @@ static GRect prv_place_bubble(GRect anchor, GSize sz, GRect bounds) {
   const int cx = anchor.origin.x + anchor.size.w / 2;
   const int cy = anchor.origin.y + anchor.size.h / 2;
 
-  GRect above = GRect(cx - sz.w / 2, anchor.origin.y - BUBBLE_LIFT - sz.h,
-                      sz.w, sz.h);
+  GRect above =
+      GRect(cx - sz.w / 2, anchor.origin.y - BUBBLE_LIFT - sz.h, sz.w, sz.h);
   GRect right = GRect(anchor.origin.x + anchor.size.w + BUBBLE_LIFT,
                       cy - sz.h / 2, sz.w, sz.h);
-  GRect left = GRect(anchor.origin.x - BUBBLE_LIFT - sz.w, cy - sz.h / 2,
-                     sz.w, sz.h);
+  GRect left =
+      GRect(anchor.origin.x - BUBBLE_LIFT - sz.w, cy - sz.h / 2, sz.w, sz.h);
   GRect r = above;
   if (prv_fit_bubble(&r, bounds, anchor.origin.y + BUBBLE_OVERLAP - sz.h)) {
     return r;
@@ -639,15 +639,14 @@ static void prv_draw_page_hint(GContext *ctx, GRect bounds) {
                      GCornerNone);
 
   bool next = s_hint == CALC_HINT_PAGE_NEXT;
-  int target = (s_engine->page + (next ? 1 : CALC_PAGE_COUNT - 1)) %
-               CALC_PAGE_COUNT;
+  int target =
+      (s_engine->page + (next ? 1 : CALC_PAGE_COUNT - 1)) % CALC_PAGE_COUNT;
   graphics_context_set_stroke_color(ctx, COLOR_HINT_KEY);
   graphics_context_set_stroke_width(ctx, 1);
   for (int i = 0; i < calc_buttons_get_count(); i++) {
     const CalcButton *btn = calc_buttons_get(target, i);
     // Keys up in the display band stay as they are.
-    if (!btn || btn->style == BUTTON_STYLE_NONE ||
-        btn->bounds.origin.y < top ||
+    if (!btn || btn->style == BUTTON_STYLE_NONE || btn->bounds.origin.y < top ||
         calc_button_get_action(btn, s_engine->rpn_mode) == CALC_ACTION_NOOP) {
       continue;
     }
@@ -664,8 +663,7 @@ static void prv_draw_page_hint(GContext *ctx, GRect bounds) {
       GTextAlignmentCenter);
   const int cx = pad.size.w / 2;
   const int cy = pad.origin.y + pad.size.h / 2;
-  graphics_fill_rect(ctx,
-                     GRect(cx - sz.w / 2 - 8, cy - 16, sz.w + 16, 32), 0,
+  graphics_fill_rect(ctx, GRect(cx - sz.w / 2 - 8, cy - 16, sz.w + 16, 32), 0,
                      GCornerNone);
   graphics_context_set_text_color(ctx, COLOR_HINT_TITLE);
   // Gothic's glyphs sit low in their line box; lift them to look centered.
