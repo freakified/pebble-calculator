@@ -22,8 +22,8 @@ static CalcEngine s_engine;
 //    into a swipe and anything else into a cancel.
 //  - SWIPE: a page flip, entered by a fast horizontal start or a long
 //    horizontal drag. It holds until the finger comes most of the way back.
-// The UI's bubble always shows what liftoff will do — the key, an ✕, or the
-// page to flip to — and liftoff does exactly that.
+// The UI always shows what liftoff will do — the key's preview bubble, the
+// page to flip to, or nothing for a cancel — and liftoff does exactly that.
 typedef enum {
   GESTURE_NONE,
   GESTURE_PENDING,
@@ -94,7 +94,7 @@ static void prv_touch_cancel(void) {
   s_touch_button = -1;
   s_touch_hint = CALC_HINT_NONE;
   calc_ui_set_pressed(-1);
-  calc_ui_set_hint(CALC_HINT_NONE, GPointZero);
+  calc_ui_set_hint(CALC_HINT_NONE);
 }
 
 static const uint32_t s_vibe_durations[] = {10};
@@ -145,17 +145,15 @@ static bool prv_travel_horizontal(int dx, int dy) {
 }
 
 // Point the gesture at key idx (-1 for none) with the given hint, and redraw
-// if that changes what's shown. Hint bubbles follow the finger, so they redraw
-// on every call.
+// if that changes what's shown.
 static void prv_set_target(int idx, CalcGestureHint hint) {
-  if (idx == s_touch_button && hint == s_touch_hint &&
-      hint == CALC_HINT_NONE) {
+  if (idx == s_touch_button && hint == s_touch_hint) {
     return;
   }
   s_touch_button = idx;
   s_touch_hint = hint;
   calc_ui_set_pressed(idx);
-  calc_ui_set_hint(hint, s_touch_last);
+  calc_ui_set_hint(hint);
   calc_ui_mark_dirty();
 }
 
@@ -174,12 +172,12 @@ static void prv_update_keys(GPoint p) {
       s_gesture = GESTURE_SWIPE;
       prv_set_target(-1, dx < 0 ? CALC_HINT_PAGE_NEXT : CALC_HINT_PAGE_PREV);
     } else {
-      prv_set_target(-1, CALC_HINT_CANCEL);
+      prv_set_target(-1, CALC_HINT_NONE);
     }
     return;
   }
   if (prv_dragged_off_edge()) {
-    prv_set_target(-1, CALC_HINT_CANCEL);
+    prv_set_target(-1, CALC_HINT_NONE);
     return;
   }
   // A little stickiness so the current key holds until the finger clearly
@@ -192,8 +190,8 @@ static void prv_update_keys(GPoint p) {
       return;
     }
   }
-  int idx = calc_buttons_hit_test(s_engine.page, hp, s_engine.rpn_mode);
-  prv_set_target(idx, idx < 0 ? CALC_HINT_CANCEL : CALC_HINT_NONE);
+  prv_set_target(calc_buttons_hit_test(s_engine.page, hp, s_engine.rpn_mode),
+                 CALC_HINT_NONE);
 }
 
 static void prv_touch_handler(const TouchEvent *event, void *context) {
@@ -212,7 +210,7 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
                                CALC_CELL_H);
     // Touching no key (the display) is a cancel from the outset, but stays a
     // swipe candidate.
-    prv_set_target(idx, idx < 0 ? CALC_HINT_CANCEL : CALC_HINT_NONE);
+    prv_set_target(idx, CALC_HINT_NONE);
 #if TOUCH_DEBUG_LOG
     APP_LOG(APP_LOG_LEVEL_INFO, "touch down (%d,%d) key=%d", event->x,
             event->y, s_touch_button);

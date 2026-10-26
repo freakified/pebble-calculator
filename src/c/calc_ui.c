@@ -45,18 +45,11 @@
 #define BUBBLE_BORDER 2
 #define BUBBLE_MAX_NUDGE 48
 
-// Gesture-hint bubbles (see calc_ui_set_hint), placed like the key preview
-// but anchored to a key-sized box around the finger. The page hint shows a
-// chevron in the swipe direction beside the page dots, the target filled.
-#define HINT_CANCEL_SIZE 40
-#define HINT_CANCEL_ARM 9
-#define HINT_PAGE_W 72
-#define HINT_PAGE_H 36
-#define HINT_PAGE_DOT_RADIUS 4
-#define HINT_PAGE_DOT_SPACING 13
-#define HINT_CHEVRON_W 6
-#define HINT_CHEVRON_H 8
-#define HINT_STROKE 3
+// Page-flip hint (see calc_ui_set_hint): covers the keypad with large page
+// dots, the target filled. Deliberately no arrow: an arrow reads as a
+// direction to go, which fights the swipe's push-the-content direction.
+#define HINT_PAGE_DOT_RADIUS 6
+#define HINT_PAGE_DOT_SPACING 22
 
 // Colors
 #define COLOR_BG GColorBlack
@@ -94,10 +87,10 @@
 #define COLOR_DOT_INACTIVE GColorLightGray
 #define COLOR_DOT_ACTIVE GColorBlack
 
-// Gesture-hint bubbles.
-#define COLOR_HINT_BG GColorWhite
-#define COLOR_HINT_FG GColorBlack
-#define COLOR_HINT_CANCEL GColorRed
+// Page-flip hint.
+#define COLOR_HINT_BG GColorBlack
+#define COLOR_HINT_FG GColorWhite
+#define COLOR_HINT_DOT_INACTIVE GColorDarkGray
 
 // Button state-indicator dot color (INV on/off; DEG/RAD selector) — filled
 // when selected, a hollow ring of the same color otherwise.
@@ -111,7 +104,6 @@ static Layer *s_ui_layer = NULL;
 static CalcEngine *s_engine = NULL;
 static int s_pressed_index = -1;
 static CalcGestureHint s_hint = CALC_HINT_NONE;
-static GPoint s_hint_finger;
 
 // ---------------------------------------------------------------------------
 // Drawing helpers
@@ -580,8 +572,8 @@ static bool prv_fit_bubble(GRect *r, GRect bounds, int max_y) {
   return false;
 }
 
-// Where a bubble of size sz goes for anchor (a key's draw rect, or a key-sized
-// box around the finger): above it, or beside it where there's no room above.
+// Where a bubble of size sz goes for anchor (a key's draw rect): above it, or
+// beside it where there's no room above.
 static GRect prv_place_bubble(GRect anchor, GSize sz, GRect bounds) {
   const int cx = anchor.origin.x + anchor.size.w / 2;
   const int cy = anchor.origin.y + anchor.size.h / 2;
@@ -634,60 +626,34 @@ static void prv_draw_key_bubble(GContext *ctx, GRect bounds) {
   prv_draw_button_content(ctx, btn, s_pressed_index, r, bg, text);
 }
 
-// The gesture-hint bubble: what liftoff will do when it isn't pressing a key —
-// an ✕ for cancel, or the page a swipe will flip to.
-static void prv_draw_hint_bubble(GContext *ctx, GRect bounds) {
-  bool cancel = s_hint == CALC_HINT_CANCEL;
-  GSize sz = cancel ? GSize(HINT_CANCEL_SIZE, HINT_CANCEL_SIZE)
-                    : GSize(HINT_PAGE_W, HINT_PAGE_H);
-  GRect finger = GRect(s_hint_finger.x - CALC_CELL_W / 2,
-                       s_hint_finger.y - CALC_CELL_H / 2, CALC_CELL_W,
-                       CALC_CELL_H);
-  GRect r = prv_place_bubble(finger, sz, bounds);
-  prv_fill_bubble(ctx, r, COLOR_HINT_BG);
+// The page-flip hint: an armed swipe blanks the keypad (the display stays
+// visible) and shows which page liftoff will flip to.
+static void prv_draw_page_hint(GContext *ctx, GRect bounds) {
+  const int top = calc_buttons_get_display_band_height();
+  GRect pad = GRect(0, top, bounds.size.w, bounds.size.h - top);
+  graphics_context_set_fill_color(ctx, COLOR_HINT_BG);
+  graphics_fill_rect(ctx, pad, 0, GCornerNone);
 
-  const int cx = r.origin.x + r.size.w / 2;
-  const int cy = r.origin.y + r.size.h / 2;
-  graphics_context_set_antialiased(ctx, true);
-  graphics_context_set_stroke_width(ctx, HINT_STROKE);
+  const int cx = pad.origin.x + pad.size.w / 2;
+  const int cy = pad.origin.y + pad.size.h / 2;
 
-  if (cancel) {
-    const int a = HINT_CANCEL_ARM;
-    graphics_context_set_stroke_color(ctx, COLOR_HINT_CANCEL);
-    graphics_draw_line(ctx, GPoint(cx - a, cy - a), GPoint(cx + a, cy + a));
-    graphics_draw_line(ctx, GPoint(cx - a, cy + a), GPoint(cx + a, cy - a));
-    return;
-  }
-
-  // A swipe left (finger travelling right→left) flips to the next page, so the
-  // chevron points the way the finger is moving.
   bool next = s_hint == CALC_HINT_PAGE_NEXT;
   int target = (s_engine->page + (next ? 1 : CALC_PAGE_COUNT - 1)) %
                CALC_PAGE_COUNT;
   const int span = (CALC_PAGE_COUNT - 1) * HINT_PAGE_DOT_SPACING;
-  const int dots_x = cx - span / 2 + (next ? HINT_CHEVRON_W : -HINT_CHEVRON_W);
   for (int i = 0; i < CALC_PAGE_COUNT; i++) {
-    GPoint c = GPoint(dots_x + i * HINT_PAGE_DOT_SPACING, cy);
+    GPoint c = GPoint(cx - span / 2 + i * HINT_PAGE_DOT_SPACING, cy);
     graphics_context_set_fill_color(
-        ctx, i == target ? COLOR_DOT_ACTIVE : COLOR_DOT_INACTIVE);
-    graphics_fill_circle(ctx, c, i == target ? HINT_PAGE_DOT_RADIUS
-                                             : HINT_PAGE_DOT_RADIUS - 1);
+        ctx, i == target ? COLOR_HINT_FG : COLOR_HINT_DOT_INACTIVE);
+    graphics_fill_circle(ctx, c, HINT_PAGE_DOT_RADIUS);
   }
-
-  const int tip_x = next ? r.origin.x + 8 : r.origin.x + r.size.w - 8;
-  const int back_x = next ? tip_x + HINT_CHEVRON_W : tip_x - HINT_CHEVRON_W;
-  graphics_context_set_stroke_color(ctx, COLOR_HINT_FG);
-  graphics_draw_line(ctx, GPoint(back_x, cy - HINT_CHEVRON_H),
-                     GPoint(tip_x, cy));
-  graphics_draw_line(ctx, GPoint(tip_x, cy),
-                     GPoint(back_x, cy + HINT_CHEVRON_H));
 }
 
 static void prv_draw_bubble(GContext *ctx, GRect bounds) {
   if (!s_engine)
     return;
   if (s_hint != CALC_HINT_NONE) {
-    prv_draw_hint_bubble(ctx, bounds);
+    prv_draw_page_hint(ctx, bounds);
   } else if (s_pressed_index >= 0) {
     prv_draw_key_bubble(ctx, bounds);
   }
@@ -735,10 +701,7 @@ void calc_ui_destroy(Layer *layer) {
 
 void calc_ui_set_pressed(int button_index) { s_pressed_index = button_index; }
 
-void calc_ui_set_hint(CalcGestureHint hint, GPoint finger) {
-  s_hint = hint;
-  s_hint_finger = finger;
-}
+void calc_ui_set_hint(CalcGestureHint hint) { s_hint = hint; }
 
 void calc_ui_set_engine(CalcEngine *engine) { s_engine = engine; }
 
