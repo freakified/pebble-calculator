@@ -23,7 +23,8 @@ static CalcEngine s_engine;
 //  - SWIPE: a page flip, entered by a fast horizontal start or a long
 //    horizontal drag. Pulling back from the furthest point reached disarms it
 //    (see SWIPE_RETREAT_PX), cancelling the whole gesture.
-//  - CANCELLED: a disarmed swipe. Nothing is shown and liftoff does nothing.
+//  - CANCELLED: a disarmed swipe, or a touch that only woke the backlight.
+//    Nothing is shown and liftoff does nothing.
 // The UI always shows what liftoff will do — the key's preview bubble, the
 // page to flip to, or nothing for a cancel — and liftoff does exactly that.
 typedef enum {
@@ -208,6 +209,24 @@ static void prv_update_keys(GPoint p) {
                  CALC_HINT_NONE);
 }
 
+// Set when the backlight turns off: the next touch only wakes the screen and
+// doesn't press anything, so lighting it up in the dark (or brushing it while
+// it's idle) can't fire a key. By the time a touchdown arrives the firmware
+// has already started lighting the screen, so light_is_on() can't tell a
+// waking touch apart; but the "on" edge is delivered just after the touchdown,
+// so it only clears this for wakes from elsewhere (wrist flick, button).
+// Every touchdown clears it too, so a light that stays off (backlight
+// disabled, bright ambient light) costs at most one touch.
+static bool s_wake_pending;
+
+static void prv_backlight_handler(bool on) {
+#if TOUCH_DEBUG_LOG
+  APP_LOG(APP_LOG_LEVEL_INFO, "backlight %s t=%lu", on ? "on" : "off",
+          (unsigned long)prv_now_ms());
+#endif
+  s_wake_pending = !on;
+}
+
 static void prv_touch_handler(const TouchEvent *event, void *context) {
   switch (event->type) {
   case TouchEvent_Touchdown: {
@@ -226,10 +245,16 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
     // swipe candidate.
     prv_set_target(idx, CALC_HINT_NONE);
 #if TOUCH_DEBUG_LOG
-    APP_LOG(APP_LOG_LEVEL_INFO, "touch down (%d,%d) key=%d", event->x,
-            event->y, s_touch_button);
+    APP_LOG(APP_LOG_LEVEL_INFO, "touch down (%d,%d) key=%d light=%d t=%lu",
+            event->x, event->y, s_touch_button, light_is_on(),
+            (unsigned long)s_touch_down_ms);
     s_debug_updates = 0;
 #endif
+    if (s_wake_pending) {
+      s_wake_pending = false;
+      prv_touch_cancel();
+      s_gesture = GESTURE_CANCELLED;
+    }
     break;
   }
 
@@ -378,6 +403,7 @@ static void prv_window_load(Window *window) {
   if (touch_service_is_enabled()) {
     touch_service_subscribe(prv_touch_handler, NULL);
   }
+  backlight_service_subscribe(prv_backlight_handler);
 }
 
 static void prv_window_unload(Window *window) {
@@ -385,6 +411,7 @@ static void prv_window_unload(Window *window) {
   light_enable(false);
 
   touch_service_unsubscribe();
+  backlight_service_unsubscribe();
   calc_ui_destroy(s_ui_layer);
   s_ui_layer = NULL;
 }
