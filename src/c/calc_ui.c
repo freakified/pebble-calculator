@@ -45,11 +45,6 @@
 #define BUBBLE_BORDER 2
 #define BUBBLE_MAX_NUDGE 48
 
-// Page-flip hint (see calc_ui_set_hint): a panel of blank key outlines, in
-// the target page's layout, slides in over the keypad, its leading edge
-// marked by a HINT_EDGE_W px line.
-#define HINT_EDGE_W 2
-
 // Colors
 #define COLOR_BG GColorBlack
 #define COLOR_DISPLAY_BG GColorWhite
@@ -86,9 +81,9 @@
 #define COLOR_DOT_INACTIVE GColorLightGray
 #define COLOR_DOT_ACTIVE GColorBlack
 
-// Page-flip hint: the incoming panel's leading edge and key outlines.
-#define COLOR_HINT_EDGE GColorLightGray
+// Page-flip hint: the target page's key outlines, and its name over them.
 #define COLOR_HINT_KEY GColorDarkGray
+#define COLOR_HINT_TITLE GColorWhite
 
 // Button state-indicator dot color (INV on/off; DEG/RAD selector) — filled
 // when selected, a hollow ring of the same color otherwise.
@@ -102,7 +97,13 @@ static Layer *s_ui_layer = NULL;
 static CalcEngine *s_engine = NULL;
 static int s_pressed_index = -1;
 static CalcGestureHint s_hint = CALC_HINT_NONE;
-static int s_hint_travel = 0;
+
+// Page names, shown by the page-flip hint.
+static const char *const s_page_titles[CALC_PAGE_COUNT] = {
+    [CALC_PAGE_BASIC] = "BASIC",
+    [CALC_PAGE_SCI] = "SCI",
+    [CALC_PAGE_MEM] = "MEM",
+};
 
 // ---------------------------------------------------------------------------
 // Drawing helpers
@@ -625,46 +626,52 @@ static void prv_draw_key_bubble(GContext *ctx, GRect bounds) {
   prv_draw_button_content(ctx, btn, s_pressed_index, r, bg, text);
 }
 
-// The page-flip hint: an armed swipe slides a panel in over the keypad from
-// the side the target page enters by (the right, for the next page), its
-// leading edge tracking the finger — the content moves with the swipe, rather
-// than an arrow pointing somewhere. The panel holds blank outlines of the
-// target page's keys: enough to read as "another page", without competing
-// with the real keys. The display stays put.
+// The page-flip hint: an armed swipe swaps the keypad, all at once, for
+// blank outlines of the target page's keys with its name over them — "this is
+// the page you'll get".
+// It shows the destination rather than a direction (an arrow reads either way
+// round, like natural scrolling) and stays still: the app's motion is
+// discrete. The display stays put.
 static void prv_draw_page_hint(GContext *ctx, GRect bounds) {
   const int top = calc_buttons_get_display_band_height();
-  const int w = bounds.size.w;
-  const int h = bounds.size.h - top;
-  int travel = s_hint_travel < w ? s_hint_travel : w;
+  graphics_context_set_fill_color(ctx, COLOR_BG);
+  graphics_fill_rect(ctx, GRect(0, top, bounds.size.w, bounds.size.h - top), 0,
+                     GCornerNone);
 
   bool next = s_hint == CALC_HINT_PAGE_NEXT;
   int target = (s_engine->page + (next ? 1 : CALC_PAGE_COUNT - 1)) %
                CALC_PAGE_COUNT;
-  int edge_x = next ? w - travel : travel;
-  GRect strip = next ? GRect(edge_x, top, travel, h) : GRect(0, top, travel, h);
-  graphics_context_set_fill_color(ctx, COLOR_BG);
-  graphics_fill_rect(ctx, strip, 0, GCornerNone);
-
-  // The panel's left edge, in screen coordinates.
-  const int x_off = next ? edge_x : edge_x - w;
   graphics_context_set_stroke_color(ctx, COLOR_HINT_KEY);
   graphics_context_set_stroke_width(ctx, 1);
   for (int i = 0; i < calc_buttons_get_count(); i++) {
     const CalcButton *btn = calc_buttons_get(target, i);
-    // Keys up in the display band stay put, so they don't slide in either.
+    // Keys up in the display band stay as they are.
     if (!btn || btn->style == BUTTON_STYLE_NONE ||
         btn->bounds.origin.y < top ||
         calc_button_get_action(btn, s_engine->rpn_mode) == CALC_ACTION_NOOP) {
       continue;
     }
-    GRect r = calc_buttons_get_button_draw_rect(btn);
-    r.origin.x += x_off;
-    graphics_draw_round_rect(ctx, r, 8);
+    graphics_draw_round_rect(ctx, calc_buttons_get_button_draw_rect(btn), 8);
   }
 
-  graphics_context_set_fill_color(ctx, COLOR_HINT_EDGE);
-  graphics_fill_rect(ctx, GRect(edge_x - HINT_EDGE_W / 2, top, HINT_EDGE_W, h),
-                     0, GCornerNone);
+  // The target page's name, centered on a black backing so the outlines don't
+  // run through it.
+  const char *title = s_page_titles[target];
+  GFont font = calc_fonts_get()->button_label;
+  GRect pad = GRect(0, top, bounds.size.w, bounds.size.h - top);
+  GSize sz = graphics_text_layout_get_content_size(
+      title, font, pad, GTextOverflowModeTrailingEllipsis,
+      GTextAlignmentCenter);
+  const int cx = pad.size.w / 2;
+  const int cy = pad.origin.y + pad.size.h / 2;
+  graphics_fill_rect(ctx,
+                     GRect(cx - sz.w / 2 - 8, cy - 16, sz.w + 16, 32), 0,
+                     GCornerNone);
+  graphics_context_set_text_color(ctx, COLOR_HINT_TITLE);
+  // Gothic's glyphs sit low in their line box; lift them to look centered.
+  graphics_draw_text(ctx, title, font, GRect(0, cy - 20, pad.size.w, 32),
+                     GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter,
+                     NULL);
 }
 
 static void prv_draw_bubble(GContext *ctx, GRect bounds) {
@@ -719,10 +726,7 @@ void calc_ui_destroy(Layer *layer) {
 
 void calc_ui_set_pressed(int button_index) { s_pressed_index = button_index; }
 
-void calc_ui_set_hint(CalcGestureHint hint, int travel) {
-  s_hint = hint;
-  s_hint_travel = travel;
-}
+void calc_ui_set_hint(CalcGestureHint hint) { s_hint = hint; }
 
 void calc_ui_set_engine(CalcEngine *engine) { s_engine = engine; }
 

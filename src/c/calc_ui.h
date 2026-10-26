@@ -21,9 +21,8 @@ typedef enum {
 } CalcGestureHint;
 
 // Show a gesture hint over the keypad, in place of the key preview (so clear
-// the pressed key alongside it). travel is how far (px) the finger has moved
-// horizontally, which the page-flip hint tracks.
-void calc_ui_set_hint(CalcGestureHint hint, int travel);
+// the pressed key alongside it).
+void calc_ui_set_hint(CalcGestureHint hint);
 
 // Set reference to the engine (for reading display values)
 void calc_ui_set_engine(CalcEngine *engine);
