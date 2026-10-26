@@ -45,8 +45,9 @@
 #define BUBBLE_BORDER 2
 #define BUBBLE_MAX_NUDGE 48
 
-// Page-flip hint (see calc_ui_set_hint): the target page's keypad slides in
-// over the current one, its leading edge marked by a HINT_EDGE_W px line.
+// Page-flip hint (see calc_ui_set_hint): a panel of blank key outlines, in
+// the target page's layout, slides in over the keypad, its leading edge
+// marked by a HINT_EDGE_W px line.
 #define HINT_EDGE_W 2
 
 // Colors
@@ -85,8 +86,9 @@
 #define COLOR_DOT_INACTIVE GColorLightGray
 #define COLOR_DOT_ACTIVE GColorBlack
 
-// Page-flip hint: the incoming keypad's leading edge.
+// Page-flip hint: the incoming panel's leading edge and key outlines.
 #define COLOR_HINT_EDGE GColorLightGray
+#define COLOR_HINT_KEY GColorDarkGray
 
 // Button state-indicator dot color (INV on/off; DEG/RAD selector) — filled
 // when selected, a hollow ring of the same color otherwise.
@@ -378,8 +380,9 @@ static void prv_draw_state_triangle(GContext *ctx, GPoint center, bool down) {
 // caller has already filled. Shared by the grid and the press-preview bubble.
 static void prv_draw_button_content(GContext *ctx, const CalcButton *btn,
                                     int index, GRect fill_rect, GColor bg,
-                                    GColor text, bool second) {
+                                    GColor text) {
   bool rpn = s_engine->rpn_mode;
+  bool second = s_engine->second_active;
   CalcAction effective_action = calc_button_get_action(btn, rpn);
   const CalcFonts *fonts = calc_fonts_get();
 
@@ -488,17 +491,17 @@ static void prv_draw_button_content(GContext *ctx, const CalcButton *btn,
   }
 }
 
-// Draws page's keys shifted x_off px sideways, skipping any that start above
-// min_y. The grid draws the current page in place; the page-flip hint draws
-// the incoming page's keypad sliding in.
-static void prv_draw_buttons(GContext *ctx, int page, int x_off, int min_y,
-                             bool second) {
+static void prv_draw_buttons(GContext *ctx, GRect bounds) {
+  if (!s_engine)
+    return;
   int count = calc_buttons_get_count();
   bool rpn = s_engine->rpn_mode;
+  bool second = s_engine->second_active;
+  int page = s_engine->page;
 
   for (int i = 0; i < count; i++) {
     const CalcButton *btn = calc_buttons_get(page, i);
-    if (!btn || btn->bounds.origin.y < min_y)
+    if (!btn)
       continue;
 
     // Skip buttons that are NONE-styled or NOOP for current mode (empty slots).
@@ -509,16 +512,14 @@ static void prv_draw_buttons(GContext *ctx, int page, int x_off, int min_y,
     }
 
     GColor bg, text;
-    bool pressed = page == s_engine->page && i == s_pressed_index;
-    prv_get_button_colors(btn, pressed, second, &bg, &text);
+    prv_get_button_colors(btn, i == s_pressed_index, second, &bg, &text);
 
     // Fill button background
     graphics_context_set_fill_color(ctx, bg);
     GRect fill_rect = calc_buttons_get_button_draw_rect(btn);
-    fill_rect.origin.x += x_off;
     graphics_fill_rect(ctx, fill_rect, 8, GCornersAll);
 
-    prv_draw_button_content(ctx, btn, i, fill_rect, bg, text, second);
+    prv_draw_button_content(ctx, btn, i, fill_rect, bg, text);
   }
 }
 
@@ -621,14 +622,15 @@ static void prv_draw_key_bubble(GContext *ctx, GRect bounds) {
   GColor bg, text;
   prv_get_button_colors(btn, false, s_engine->second_active, &bg, &text);
   prv_fill_bubble(ctx, r, bg);
-  prv_draw_button_content(ctx, btn, s_pressed_index, r, bg, text,
-                          s_engine->second_active);
+  prv_draw_button_content(ctx, btn, s_pressed_index, r, bg, text);
 }
 
-// The page-flip hint: an armed swipe slides the target page's keypad in over
-// the current one from the side it enters by (the right, for the next page),
-// its leading edge tracking the finger — the content moves with the swipe,
-// rather than an arrow pointing somewhere. The display stays put.
+// The page-flip hint: an armed swipe slides a panel in over the keypad from
+// the side the target page enters by (the right, for the next page), its
+// leading edge tracking the finger — the content moves with the swipe, rather
+// than an arrow pointing somewhere. The panel holds blank outlines of the
+// target page's keys: enough to read as "another page", without competing
+// with the real keys. The display stays put.
 static void prv_draw_page_hint(GContext *ctx, GRect bounds) {
   const int top = calc_buttons_get_display_band_height();
   const int w = bounds.size.w;
@@ -638,13 +640,27 @@ static void prv_draw_page_hint(GContext *ctx, GRect bounds) {
   bool next = s_hint == CALC_HINT_PAGE_NEXT;
   int target = (s_engine->page + (next ? 1 : CALC_PAGE_COUNT - 1)) %
                CALC_PAGE_COUNT;
-  // The incoming keypad's left edge sits at edge_x - (next ? 0 : w).
   int edge_x = next ? w - travel : travel;
   GRect strip = next ? GRect(edge_x, top, travel, h) : GRect(0, top, travel, h);
   graphics_context_set_fill_color(ctx, COLOR_BG);
   graphics_fill_rect(ctx, strip, 0, GCornerNone);
-  // Paging clears the 2nd modifier, so show the target page without it.
-  prv_draw_buttons(ctx, target, next ? edge_x : edge_x - w, top, false);
+
+  // The panel's left edge, in screen coordinates.
+  const int x_off = next ? edge_x : edge_x - w;
+  graphics_context_set_stroke_color(ctx, COLOR_HINT_KEY);
+  graphics_context_set_stroke_width(ctx, 1);
+  for (int i = 0; i < calc_buttons_get_count(); i++) {
+    const CalcButton *btn = calc_buttons_get(target, i);
+    // Keys up in the display band stay put, so they don't slide in either.
+    if (!btn || btn->style == BUTTON_STYLE_NONE ||
+        btn->bounds.origin.y < top ||
+        calc_button_get_action(btn, s_engine->rpn_mode) == CALC_ACTION_NOOP) {
+      continue;
+    }
+    GRect r = calc_buttons_get_button_draw_rect(btn);
+    r.origin.x += x_off;
+    graphics_draw_round_rect(ctx, r, 8);
+  }
 
   graphics_context_set_fill_color(ctx, COLOR_HINT_EDGE);
   graphics_fill_rect(ctx, GRect(edge_x - HINT_EDGE_W / 2, top, HINT_EDGE_W, h),
@@ -676,9 +692,7 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
   prv_draw_display(ctx, bounds);
 
   // Draw button grid
-  if (s_engine) {
-    prv_draw_buttons(ctx, s_engine->page, 0, 0, s_engine->second_active);
-  }
+  prv_draw_buttons(ctx, bounds);
 
   // Press preview floats over everything else.
   prv_draw_bubble(ctx, bounds);
