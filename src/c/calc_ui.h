@@ -13,6 +13,18 @@ void calc_ui_destroy(Layer *layer);
 // highlighted and previewed in a bubble above the finger.
 void calc_ui_set_pressed(int button_index);
 
+// What a touch gesture will do at liftoff when that isn't pressing a key.
+typedef enum {
+  CALC_HINT_NONE,      // no hint (the pressed key's preview, if any, shows)
+  CALC_HINT_CANCEL,    // liftoff does nothing
+  CALC_HINT_PAGE_NEXT, // liftoff flips to the next page
+  CALC_HINT_PAGE_PREV, // liftoff flips to the previous page
+} CalcGestureHint;
+
+// Show a gesture hint in a bubble above the finger, in place of the key
+// preview (so clear the pressed key alongside it).
+void calc_ui_set_hint(CalcGestureHint hint, GPoint finger);
+
 // Set reference to the engine (for reading display values)
 void calc_ui_set_engine(CalcEngine *engine);
 

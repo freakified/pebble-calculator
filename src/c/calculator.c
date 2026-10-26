@@ -13,24 +13,35 @@ static Window *s_window;
 static Layer *s_ui_layer;
 static CalcEngine s_engine;
 
-// Touch gesture state. The target key follows the finger (slide-to-correct,
-// like the iOS keyboard): whichever key is under the finger at liftoff fires,
-// and the UI previews it in a bubble above the finger so you can see it.
-// Lifting off over the display or an empty slot, or after dragging off the
-// edge of the screen, cancels.
-static int s_touch_button = -1;   // key currently under the finger (-1 if none)
-static bool s_gesture_active = false;  // a touch gesture is in flight; tracked
-                                       // even off-button so swipes work anywhere
-static GPoint s_touch_origin;     // touchdown point, for swipe detection
+// Touch gesture state. Each gesture locks into a mode early on:
+//  - PENDING: just touched down. Too soon to tell a press from a flick, so
+//    the touched key is previewed and a liftoff now is a plain tap.
+//  - KEYS: pressing a key. The target follows the finger (slide-to-correct,
+//    like the iOS keyboard) but only among the touched key's neighbours, since
+//    real mistaps are off by one. Straying further turns a horizontal drag
+//    into a swipe and anything else into a cancel.
+//  - SWIPE: a page flip, entered by a fast horizontal start or a long
+//    horizontal drag. It holds until the finger comes most of the way back.
+// The UI's bubble always shows what liftoff will do — the key, an ✕, or the
+// page to flip to — and liftoff does exactly that.
+typedef enum {
+  GESTURE_NONE,
+  GESTURE_PENDING,
+  GESTURE_KEYS,
+  GESTURE_SWIPE,
+} GestureMode;
+
+static GestureMode s_gesture = GESTURE_NONE;
+static int s_touch_button = -1;   // key liftoff would fire (-1 if none)
+static CalcGestureHint s_touch_hint = CALC_HINT_NONE; // shown in its place
+static GRect s_touch_home;        // touched key's bounds (a key-sized box
+                                  // around touchdown if it missed every key);
+                                  // KEYS mode retargets only near this
+static GPoint s_touch_origin;     // touchdown point
 static GPoint s_touch_last;       // last reported point (liftoff coords can be
                                   // stale on some drivers, so track it ourselves)
-static uint32_t s_last_motion_ms; // wall-clock ms of the last update that showed
-                                  // real motion; a stale value at liftoff means
-                                  // the finger dwelled, which suppresses the swipe
+static uint32_t s_touch_down_ms;  // wall-clock ms of touchdown, for onset timing
 static GRect s_screen_bounds;     // for edge-cancel detection
-static GPoint s_motion_ref;       // point at which s_last_motion_ms was stamped;
-                                  // motion is measured against this, not the last
-                                  // update, so a slow continuous drift still stamps
 
 // Fingers tend to land a little below the spot you're aiming at, so hit-testing
 // shifts each touch up by this much (negative shifts down). Experimental:
@@ -49,21 +60,18 @@ static int s_debug_updates; // position updates seen in the current gesture
 // dragging, so a wobble at a shared cell edge doesn't flicker between keys.
 #define TOUCH_SLOP_PX 4
 
-// Horizontal liftoff displacement (px) that reclassifies a gesture as a
-// left/right page-flip swipe instead of a key press. It's ~1.5 key widths so a
-// one-key sideways correction can't flip the page. To avoid diagonal drags
-// flipping pages, the horizontal travel must also dominate the vertical by
-// SWIPE_DOMINANCE_NUM/DEN.
-#define SWIPE_THRESHOLD_PX 75
+// Onset lock: once the finger has travelled ONSET_PX from touchdown, a gesture
+// that got there within ONSET_MS with horizontal travel dominating vertical by
+// SWIPE_DOMINANCE_NUM/DEN is a flick (SWIPE); anything slower or more vertical
+// is a press (KEYS). A finger still within ONSET_PX after ONSET_MS is a press.
+#define ONSET_PX 10
+#define ONSET_MS 120
 #define SWIPE_DOMINANCE_NUM 3
 #define SWIPE_DOMINANCE_DEN 2
 
-// A swipe must end in motion: if the finger dwelled (stopped moving) for longer
-// than SWIPE_DWELL_MS before liftoff, it's a press rather than a page flip —
-// you slid to a key, paused to check the preview, and lifted. Jitter under
-// MOTION_EPS_PX doesn't count as motion, so holding still truly dwells.
-#define SWIPE_DWELL_MS 250
-#define MOTION_EPS_PX 3
+// A SWIPE falls back to KEYS once the finger returns within SWIPE_EXIT_PX
+// (horizontally) of where it touched down.
+#define SWIPE_EXIT_PX 15
 
 // Dragging a finger to within EDGE_CANCEL_PX of the screen edge (i.e. off the
 // screen) cancels the press. The bottom-row keys run right up to the edge, so
@@ -82,11 +90,11 @@ static uint32_t prv_now_ms(void) {
 }
 
 static void prv_touch_cancel(void) {
-  s_gesture_active = false;
-  if (s_touch_button >= 0) {
-    s_touch_button = -1;
-    calc_ui_set_pressed(-1);
-  }
+  s_gesture = GESTURE_NONE;
+  s_touch_button = -1;
+  s_touch_hint = CALC_HINT_NONE;
+  calc_ui_set_pressed(-1);
+  calc_ui_set_hint(CALC_HINT_NONE, GPointZero);
 }
 
 static const uint32_t s_vibe_durations[] = {10};
@@ -129,14 +137,63 @@ static GPoint prv_hit_point(GPoint p) {
   return GPoint(p.x, y < 0 ? 0 : (y > max_y ? max_y : y));
 }
 
-// Make idx the key under the finger.
-static void prv_set_touch_button(int idx) {
-  if (idx == s_touch_button) {
+// Whether the finger's travel since touchdown is mostly horizontal.
+static bool prv_travel_horizontal(int dx, int dy) {
+  int adx = dx < 0 ? -dx : dx;
+  int ady = dy < 0 ? -dy : dy;
+  return adx * SWIPE_DOMINANCE_DEN >= ady * SWIPE_DOMINANCE_NUM;
+}
+
+// Point the gesture at key idx (-1 for none) with the given hint, and redraw
+// if that changes what's shown. Hint bubbles follow the finger, so they redraw
+// on every call.
+static void prv_set_target(int idx, CalcGestureHint hint) {
+  if (idx == s_touch_button && hint == s_touch_hint &&
+      hint == CALC_HINT_NONE) {
     return;
   }
   s_touch_button = idx;
+  s_touch_hint = hint;
   calc_ui_set_pressed(idx);
+  calc_ui_set_hint(hint, s_touch_last);
   calc_ui_mark_dirty();
+}
+
+// KEYS mode: retarget to the key under the finger, within the touched key's
+// neighbourhood. Leaving the neighbourhood horizontally becomes a SWIPE (when
+// swipe paging is on); leaving it any other way, dragging off the screen, or
+// sitting over no key at all (the display, an empty slot) is a cancel.
+static void prv_update_keys(GPoint p) {
+  int dx = p.x - s_touch_origin.x;
+  int dy = p.y - s_touch_origin.y;
+  GPoint hp = prv_hit_point(p);
+  GRect hood = grect_inset(s_touch_home, GEdgeInsets(-(CALC_CELL_H + TOUCH_SLOP_PX),
+                                                     -(CALC_CELL_W + TOUCH_SLOP_PX)));
+  if (!grect_contains_point(&hood, &hp)) {
+    if (calc_settings_swipe_paging_enabled() && prv_travel_horizontal(dx, dy)) {
+      s_gesture = GESTURE_SWIPE;
+      prv_set_target(-1, dx < 0 ? CALC_HINT_PAGE_NEXT : CALC_HINT_PAGE_PREV);
+    } else {
+      prv_set_target(-1, CALC_HINT_CANCEL);
+    }
+    return;
+  }
+  if (prv_dragged_off_edge()) {
+    prv_set_target(-1, CALC_HINT_CANCEL);
+    return;
+  }
+  // A little stickiness so the current key holds until the finger clearly
+  // leaves it.
+  const CalcButton *cur = calc_buttons_get(s_engine.page, s_touch_button);
+  if (cur) {
+    GRect slop = grect_inset(cur->bounds, GEdgeInsets(-TOUCH_SLOP_PX));
+    if (grect_contains_point(&slop, &hp)) {
+      prv_set_target(s_touch_button, CALC_HINT_NONE);
+      return;
+    }
+  }
+  int idx = calc_buttons_hit_test(s_engine.page, hp, s_engine.rpn_mode);
+  prv_set_target(idx, idx < 0 ? CALC_HINT_CANCEL : CALC_HINT_NONE);
 }
 
 static void prv_touch_handler(const TouchEvent *event, void *context) {
@@ -144,12 +201,18 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
   case TouchEvent_Touchdown: {
     s_touch_origin = GPoint(event->x, event->y);
     s_touch_last = s_touch_origin;
-    s_motion_ref = s_touch_origin;
-    s_last_motion_ms = prv_now_ms();
-    s_gesture_active = true;
-    s_touch_button = -1;
-    prv_set_touch_button(calc_buttons_hit_test(
-        s_engine.page, prv_hit_point(s_touch_origin), s_engine.rpn_mode));
+    s_touch_down_ms = prv_now_ms();
+    s_gesture = GESTURE_PENDING;
+    int idx = calc_buttons_hit_test(
+        s_engine.page, prv_hit_point(s_touch_origin), s_engine.rpn_mode);
+    const CalcButton *btn = calc_buttons_get(s_engine.page, idx);
+    s_touch_home = btn ? btn->bounds
+                       : GRect(s_touch_origin.x - CALC_CELL_W / 2,
+                               s_touch_origin.y - CALC_CELL_H / 2, CALC_CELL_W,
+                               CALC_CELL_H);
+    // Touching no key (the display) is a cancel from the outset, but stays a
+    // swipe candidate.
+    prv_set_target(idx, idx < 0 ? CALC_HINT_CANCEL : CALC_HINT_NONE);
 #if TOUCH_DEBUG_LOG
     APP_LOG(APP_LOG_LEVEL_INFO, "touch down (%d,%d) key=%d", event->x,
             event->y, s_touch_button);
@@ -159,90 +222,70 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
   }
 
   case TouchEvent_PositionUpdate: {
-    if (!s_gesture_active) {
+    if (s_gesture == GESTURE_NONE) {
       break;
     }
     GPoint p = GPoint(event->x, event->y);
     s_touch_last = p;
+    int dx = p.x - s_touch_origin.x;
+    int dy = p.y - s_touch_origin.y;
 #if TOUCH_DEBUG_LOG
     ++s_debug_updates;
-    APP_LOG(APP_LOG_LEVEL_INFO, "  move (%d,%d) key=%d", p.x, p.y,
-            calc_buttons_hit_test(s_engine.page, prv_hit_point(p),
-                                  s_engine.rpn_mode));
+    APP_LOG(APP_LOG_LEVEL_INFO, "  move (%d,%d) mode=%d t=%lu", p.x, p.y,
+            s_gesture, (unsigned long)(prv_now_ms() - s_touch_down_ms));
 #endif
-    // Re-stamp the motion clock only when the finger has actually travelled past
-    // MOTION_EPS_PX from where it was last stamped. Measuring against s_motion_ref
-    // (not the previous update) means a slow drag of many tiny steps still trips
-    // the threshold cumulatively, while a held finger's jitter never does — so
-    // the dwell timer at liftoff reflects real stillness.
-    int mdx = p.x - s_motion_ref.x;
-    int mdy = p.y - s_motion_ref.y;
-    if (mdx * mdx + mdy * mdy >= MOTION_EPS_PX * MOTION_EPS_PX) {
-      s_motion_ref = p;
-      s_last_motion_ms = prv_now_ms();
-    }
-    // Off the edge of the screen: nothing will fire, so drop the highlight and
-    // bubble to show it. Sliding back in picks up a key again.
-    if (prv_dragged_off_edge()) {
-      prv_set_touch_button(-1);
-      break;
-    }
-    // Retarget to whatever key is now under the finger, with a little
-    // stickiness so the current key holds until the finger clearly leaves it.
-    GPoint hp = prv_hit_point(p);
-    const CalcButton *cur = calc_buttons_get(s_engine.page, s_touch_button);
-    if (cur) {
-      GRect slop = grect_inset(cur->bounds, GEdgeInsets(-TOUCH_SLOP_PX));
-      if (grect_contains_point(&slop, &hp)) {
-        break;
+    if (s_gesture == GESTURE_PENDING) {
+      uint32_t elapsed = prv_now_ms() - s_touch_down_ms;
+      bool travelled = dx * dx + dy * dy >= ONSET_PX * ONSET_PX;
+      if (travelled && elapsed <= ONSET_MS &&
+          calc_settings_swipe_paging_enabled() &&
+          prv_travel_horizontal(dx, dy)) {
+        s_gesture = GESTURE_SWIPE;
+      } else if (travelled || elapsed > ONSET_MS) {
+        s_gesture = GESTURE_KEYS;
+      } else {
+        break; // still deciding; keep previewing the touched key
       }
     }
-    prv_set_touch_button(
-        calc_buttons_hit_test(s_engine.page, hp, s_engine.rpn_mode));
+    if (s_gesture == GESTURE_SWIPE) {
+      if ((dx < 0 ? -dx : dx) >= SWIPE_EXIT_PX) {
+        prv_set_target(-1, dx < 0 ? CALC_HINT_PAGE_NEXT : CALC_HINT_PAGE_PREV);
+        break;
+      }
+      s_gesture = GESTURE_KEYS;
+    }
+    prv_update_keys(p);
     break;
   }
 
   case TouchEvent_Liftoff: {
 #if TOUCH_DEBUG_LOG
     APP_LOG(APP_LOG_LEVEL_INFO,
-            "touch up (%d,%d) last=(%d,%d) key=%d edge=%d moves=%d",
+            "touch up (%d,%d) last=(%d,%d) key=%d mode=%d moves=%d",
             event->x, event->y, s_touch_last.x, s_touch_last.y,
-            s_touch_button, prv_dragged_off_edge(), s_debug_updates);
+            s_touch_button, s_gesture, s_debug_updates);
 #endif
-    if (s_gesture_active) {
-      // A fast horizontal flick flips pages, wherever it started; otherwise
-      // the key under the finger (if any) fires.
+    if (s_gesture == GESTURE_SWIPE) {
+      // Swipe left (finger travels right→left) = next page, matching paged
+      // scroll views elsewhere; swipe right = previous.
       int dx = s_touch_last.x - s_touch_origin.x;
-      int dy = s_touch_last.y - s_touch_origin.y;
-      int adx = dx < 0 ? -dx : dx;
-      int ady = dy < 0 ? -dy : dy;
-      // A swipe must still be in motion at liftoff. If the finger dwelled past
-      // SWIPE_DWELL_MS, it settled on a key on purpose: commit that instead.
-      bool moving = (prv_now_ms() - s_last_motion_ms) <= SWIPE_DWELL_MS;
-      bool is_swipe = calc_settings_swipe_paging_enabled() && moving &&
-                      adx >= SWIPE_THRESHOLD_PX &&
-                      adx * SWIPE_DOMINANCE_DEN >= ady * SWIPE_DOMINANCE_NUM;
-      if (is_swipe) {
-        // Swipe left (finger travels right→left) = next page, matching paged
-        // scroll views elsewhere; swipe right = previous.
-        calc_engine_handle_action(
-            &s_engine, dx < 0 ? CALC_ACTION_PAGE_NEXT : CALC_ACTION_PAGE_PREV);
-      } else if (!prv_dragged_off_edge()) {
-        const CalcButton *btn = calc_buttons_get(s_engine.page, s_touch_button);
-        if (btn) {
-          // Buzz only once a press actually registers, so sliding or flicking
-          // across keys stays quiet.
-          if (calc_settings_haptic_enabled()) {
-            vibes_enqueue_custom_pattern(s_vibe_pattern);
-          }
-          CalcAction action = calc_button_get_action(btn, s_engine.rpn_mode);
-          // The engine resolves the 2nd-modifier itself, so dispatch raw.
-          calc_engine_handle_action(&s_engine, action);
+      calc_engine_handle_action(
+          &s_engine, dx < 0 ? CALC_ACTION_PAGE_NEXT : CALC_ACTION_PAGE_PREV);
+    } else if (s_gesture != GESTURE_NONE) {
+      const CalcButton *btn = calc_buttons_get(s_engine.page, s_touch_button);
+      if (btn) {
+        // Buzz only once a press actually registers, so sliding or flicking
+        // across keys stays quiet.
+        if (calc_settings_haptic_enabled()) {
+          vibes_enqueue_custom_pattern(s_vibe_pattern);
         }
+        CalcAction action = calc_button_get_action(btn, s_engine.rpn_mode);
+        // The engine resolves the 2nd-modifier itself, so dispatch raw.
+        calc_engine_handle_action(&s_engine, action);
       }
-      s_gesture_active = false;
-      s_touch_button = -1;
-      calc_ui_set_pressed(-1);
+    }
+    if (s_gesture != GESTURE_NONE) {
+      prv_touch_cancel();
       calc_ui_mark_dirty();
     }
     break;
