@@ -22,7 +22,8 @@ static CalcEngine s_engine;
 //    into a swipe and anything else into a cancel.
 //  - SWIPE: a page flip, entered by a fast horizontal start or a long
 //    horizontal drag. Pulling back from the furthest point reached disarms it
-//    (see SWIPE_RETREAT_PX).
+//    (see SWIPE_RETREAT_PX), cancelling the whole gesture.
+//  - CANCELLED: a disarmed swipe. Nothing is shown and liftoff does nothing.
 // The UI always shows what liftoff will do — the key's preview bubble, the
 // page to flip to, or nothing for a cancel — and liftoff does exactly that.
 typedef enum {
@@ -30,6 +31,7 @@ typedef enum {
   GESTURE_PENDING,
   GESTURE_KEYS,
   GESTURE_SWIPE,
+  GESTURE_CANCELLED,
 } GestureMode;
 
 static GestureMode s_gesture = GESTURE_NONE;
@@ -37,8 +39,6 @@ static int s_touch_button = -1;   // key liftoff would fire (-1 if none)
 static CalcGestureHint s_touch_hint = CALC_HINT_NONE; // shown in its place
 static int s_swipe_dir;           // armed swipe's direction: -1 left, 1 right
 static int s_swipe_peak;          // furthest travel (px) in s_swipe_dir
-static bool s_swipe_disarmed;     // pulled back out of a swipe; see
-                                  // prv_update_keys
 static GRect s_touch_home;        // touched key's bounds (a key-sized box
                                   // around touchdown if it missed every key);
                                   // KEYS mode retargets only near this
@@ -74,7 +74,7 @@ static int s_debug_updates; // position updates seen in the current gesture
 #define SWIPE_DOMINANCE_NUM 3
 #define SWIPE_DOMINANCE_DEN 2
 
-// An armed SWIPE disarms (back to KEYS) once the finger pulls back
+// An armed SWIPE disarms (cancelling the gesture) once the finger pulls back
 // SWIPE_RETREAT_PX from the furthest point it reached, or back past where it
 // touched down. Measuring from the peak makes pulling back feel the same
 // however far the swipe went; the margin rides out liftoff wobble.
@@ -100,7 +100,6 @@ static void prv_touch_cancel(void) {
   s_gesture = GESTURE_NONE;
   s_touch_button = -1;
   s_touch_hint = CALC_HINT_NONE;
-  s_swipe_disarmed = false;
   calc_ui_set_pressed(-1);
   calc_ui_set_hint(CALC_HINT_NONE);
 }
@@ -176,10 +175,7 @@ static void prv_arm_swipe(int dx) {
 // KEYS mode: retarget to the key under the finger, within the touched key's
 // neighbourhood. Leaving the neighbourhood horizontally becomes a SWIPE (when
 // swipe paging is on); leaving it any other way, dragging off the screen, or
-// sitting over no key at all (the display, an empty slot) is a cancel. Once a
-// swipe has been pulled back out of, leaving the neighbourhood stays a cancel
-// until the finger returns to it — otherwise a finger still out there would
-// re-arm straight away.
+// sitting over no key at all (the display, an empty slot) is a cancel.
 static void prv_update_keys(GPoint p) {
   int dx = p.x - s_touch_origin.x;
   int dy = p.y - s_touch_origin.y;
@@ -187,15 +183,13 @@ static void prv_update_keys(GPoint p) {
   GRect hood = grect_inset(s_touch_home, GEdgeInsets(-(CALC_CELL_H + TOUCH_SLOP_PX),
                                                      -(CALC_CELL_W + TOUCH_SLOP_PX)));
   if (!grect_contains_point(&hood, &hp)) {
-    if (!s_swipe_disarmed && calc_settings_swipe_paging_enabled() &&
-        prv_travel_horizontal(dx, dy)) {
+    if (calc_settings_swipe_paging_enabled() && prv_travel_horizontal(dx, dy)) {
       prv_arm_swipe(dx);
     } else {
       prv_set_target(-1, CALC_HINT_NONE);
     }
     return;
   }
-  s_swipe_disarmed = false;
   if (prv_dragged_off_edge()) {
     prv_set_target(-1, CALC_HINT_NONE);
     return;
@@ -240,7 +234,7 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
   }
 
   case TouchEvent_PositionUpdate: {
-    if (s_gesture == GESTURE_NONE) {
+    if (s_gesture == GESTURE_NONE || s_gesture == GESTURE_CANCELLED) {
       break;
     }
     GPoint p = GPoint(event->x, event->y);
@@ -271,11 +265,11 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
       if (progress > s_swipe_peak) {
         s_swipe_peak = progress;
       }
-      if (progress > 0 && progress > s_swipe_peak - SWIPE_RETREAT_PX) {
-        break; // still armed
+      if (progress <= 0 || progress <= s_swipe_peak - SWIPE_RETREAT_PX) {
+        s_gesture = GESTURE_CANCELLED;
+        prv_set_target(-1, CALC_HINT_NONE);
       }
-      s_gesture = GESTURE_KEYS;
-      s_swipe_disarmed = true;
+      break;
     }
     prv_update_keys(p);
     break;
@@ -294,7 +288,7 @@ static void prv_touch_handler(const TouchEvent *event, void *context) {
       calc_engine_handle_action(&s_engine, s_swipe_dir < 0
                                                ? CALC_ACTION_PAGE_NEXT
                                                : CALC_ACTION_PAGE_PREV);
-    } else if (s_gesture != GESTURE_NONE) {
+    } else if (s_gesture == GESTURE_PENDING || s_gesture == GESTURE_KEYS) {
       const CalcButton *btn = calc_buttons_get(s_engine.page, s_touch_button);
       if (btn) {
         // Buzz only once a press actually registers, so sliding or flicking
