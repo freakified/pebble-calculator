@@ -45,11 +45,9 @@
 #define BUBBLE_BORDER 2
 #define BUBBLE_MAX_NUDGE 48
 
-// Page-flip hint (see calc_ui_set_hint): covers the keypad with large page
-// dots, the target filled. Deliberately no arrow: an arrow reads as a
-// direction to go, which fights the swipe's push-the-content direction.
-#define HINT_PAGE_DOT_RADIUS 6
-#define HINT_PAGE_DOT_SPACING 22
+// Page-flip hint (see calc_ui_set_hint): the target page's keypad slides in
+// over the current one, its leading edge marked by a HINT_EDGE_W px line.
+#define HINT_EDGE_W 2
 
 // Colors
 #define COLOR_BG GColorBlack
@@ -87,10 +85,8 @@
 #define COLOR_DOT_INACTIVE GColorLightGray
 #define COLOR_DOT_ACTIVE GColorBlack
 
-// Page-flip hint.
-#define COLOR_HINT_BG GColorBlack
-#define COLOR_HINT_FG GColorWhite
-#define COLOR_HINT_DOT_INACTIVE GColorDarkGray
+// Page-flip hint: the incoming keypad's leading edge.
+#define COLOR_HINT_EDGE GColorLightGray
 
 // Button state-indicator dot color (INV on/off; DEG/RAD selector) — filled
 // when selected, a hollow ring of the same color otherwise.
@@ -104,6 +100,7 @@ static Layer *s_ui_layer = NULL;
 static CalcEngine *s_engine = NULL;
 static int s_pressed_index = -1;
 static CalcGestureHint s_hint = CALC_HINT_NONE;
+static int s_hint_travel = 0;
 
 // ---------------------------------------------------------------------------
 // Drawing helpers
@@ -381,9 +378,8 @@ static void prv_draw_state_triangle(GContext *ctx, GPoint center, bool down) {
 // caller has already filled. Shared by the grid and the press-preview bubble.
 static void prv_draw_button_content(GContext *ctx, const CalcButton *btn,
                                     int index, GRect fill_rect, GColor bg,
-                                    GColor text) {
+                                    GColor text, bool second) {
   bool rpn = s_engine->rpn_mode;
-  bool second = s_engine->second_active;
   CalcAction effective_action = calc_button_get_action(btn, rpn);
   const CalcFonts *fonts = calc_fonts_get();
 
@@ -492,17 +488,17 @@ static void prv_draw_button_content(GContext *ctx, const CalcButton *btn,
   }
 }
 
-static void prv_draw_buttons(GContext *ctx, GRect bounds) {
-  if (!s_engine)
-    return;
+// Draws page's keys shifted x_off px sideways, skipping any that start above
+// min_y. The grid draws the current page in place; the page-flip hint draws
+// the incoming page's keypad sliding in.
+static void prv_draw_buttons(GContext *ctx, int page, int x_off, int min_y,
+                             bool second) {
   int count = calc_buttons_get_count();
   bool rpn = s_engine->rpn_mode;
-  bool second = s_engine->second_active;
-  int page = s_engine->page;
 
   for (int i = 0; i < count; i++) {
     const CalcButton *btn = calc_buttons_get(page, i);
-    if (!btn)
+    if (!btn || btn->bounds.origin.y < min_y)
       continue;
 
     // Skip buttons that are NONE-styled or NOOP for current mode (empty slots).
@@ -513,14 +509,16 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
     }
 
     GColor bg, text;
-    prv_get_button_colors(btn, i == s_pressed_index, second, &bg, &text);
+    bool pressed = page == s_engine->page && i == s_pressed_index;
+    prv_get_button_colors(btn, pressed, second, &bg, &text);
 
     // Fill button background
     graphics_context_set_fill_color(ctx, bg);
     GRect fill_rect = calc_buttons_get_button_draw_rect(btn);
+    fill_rect.origin.x += x_off;
     graphics_fill_rect(ctx, fill_rect, 8, GCornersAll);
 
-    prv_draw_button_content(ctx, btn, i, fill_rect, bg, text);
+    prv_draw_button_content(ctx, btn, i, fill_rect, bg, text, second);
   }
 }
 
@@ -623,30 +621,34 @@ static void prv_draw_key_bubble(GContext *ctx, GRect bounds) {
   GColor bg, text;
   prv_get_button_colors(btn, false, s_engine->second_active, &bg, &text);
   prv_fill_bubble(ctx, r, bg);
-  prv_draw_button_content(ctx, btn, s_pressed_index, r, bg, text);
+  prv_draw_button_content(ctx, btn, s_pressed_index, r, bg, text,
+                          s_engine->second_active);
 }
 
-// The page-flip hint: an armed swipe blanks the keypad (the display stays
-// visible) and shows which page liftoff will flip to.
+// The page-flip hint: an armed swipe slides the target page's keypad in over
+// the current one from the side it enters by (the right, for the next page),
+// its leading edge tracking the finger — the content moves with the swipe,
+// rather than an arrow pointing somewhere. The display stays put.
 static void prv_draw_page_hint(GContext *ctx, GRect bounds) {
   const int top = calc_buttons_get_display_band_height();
-  GRect pad = GRect(0, top, bounds.size.w, bounds.size.h - top);
-  graphics_context_set_fill_color(ctx, COLOR_HINT_BG);
-  graphics_fill_rect(ctx, pad, 0, GCornerNone);
-
-  const int cx = pad.origin.x + pad.size.w / 2;
-  const int cy = pad.origin.y + pad.size.h / 2;
+  const int w = bounds.size.w;
+  const int h = bounds.size.h - top;
+  int travel = s_hint_travel < w ? s_hint_travel : w;
 
   bool next = s_hint == CALC_HINT_PAGE_NEXT;
   int target = (s_engine->page + (next ? 1 : CALC_PAGE_COUNT - 1)) %
                CALC_PAGE_COUNT;
-  const int span = (CALC_PAGE_COUNT - 1) * HINT_PAGE_DOT_SPACING;
-  for (int i = 0; i < CALC_PAGE_COUNT; i++) {
-    GPoint c = GPoint(cx - span / 2 + i * HINT_PAGE_DOT_SPACING, cy);
-    graphics_context_set_fill_color(
-        ctx, i == target ? COLOR_HINT_FG : COLOR_HINT_DOT_INACTIVE);
-    graphics_fill_circle(ctx, c, HINT_PAGE_DOT_RADIUS);
-  }
+  // The incoming keypad's left edge sits at edge_x - (next ? 0 : w).
+  int edge_x = next ? w - travel : travel;
+  GRect strip = next ? GRect(edge_x, top, travel, h) : GRect(0, top, travel, h);
+  graphics_context_set_fill_color(ctx, COLOR_BG);
+  graphics_fill_rect(ctx, strip, 0, GCornerNone);
+  // Paging clears the 2nd modifier, so show the target page without it.
+  prv_draw_buttons(ctx, target, next ? edge_x : edge_x - w, top, false);
+
+  graphics_context_set_fill_color(ctx, COLOR_HINT_EDGE);
+  graphics_fill_rect(ctx, GRect(edge_x - HINT_EDGE_W / 2, top, HINT_EDGE_W, h),
+                     0, GCornerNone);
 }
 
 static void prv_draw_bubble(GContext *ctx, GRect bounds) {
@@ -674,7 +676,9 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
   prv_draw_display(ctx, bounds);
 
   // Draw button grid
-  prv_draw_buttons(ctx, bounds);
+  if (s_engine) {
+    prv_draw_buttons(ctx, s_engine->page, 0, 0, s_engine->second_active);
+  }
 
   // Press preview floats over everything else.
   prv_draw_bubble(ctx, bounds);
@@ -701,7 +705,10 @@ void calc_ui_destroy(Layer *layer) {
 
 void calc_ui_set_pressed(int button_index) { s_pressed_index = button_index; }
 
-void calc_ui_set_hint(CalcGestureHint hint) { s_hint = hint; }
+void calc_ui_set_hint(CalcGestureHint hint, int travel) {
+  s_hint = hint;
+  s_hint_travel = travel;
+}
 
 void calc_ui_set_engine(CalcEngine *engine) { s_engine = engine; }
 

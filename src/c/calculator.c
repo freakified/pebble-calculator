@@ -94,7 +94,7 @@ static void prv_touch_cancel(void) {
   s_touch_button = -1;
   s_touch_hint = CALC_HINT_NONE;
   calc_ui_set_pressed(-1);
-  calc_ui_set_hint(CALC_HINT_NONE);
+  calc_ui_set_hint(CALC_HINT_NONE, 0);
 }
 
 static const uint32_t s_vibe_durations[] = {10};
@@ -145,15 +145,18 @@ static bool prv_travel_horizontal(int dx, int dy) {
 }
 
 // Point the gesture at key idx (-1 for none) with the given hint, and redraw
-// if that changes what's shown.
+// if that changes what's shown. The page-flip hint tracks the finger, so it
+// redraws on every call.
 static void prv_set_target(int idx, CalcGestureHint hint) {
-  if (idx == s_touch_button && hint == s_touch_hint) {
+  if (idx == s_touch_button && hint == s_touch_hint &&
+      hint == CALC_HINT_NONE) {
     return;
   }
   s_touch_button = idx;
   s_touch_hint = hint;
   calc_ui_set_pressed(idx);
-  calc_ui_set_hint(hint);
+  int travel = s_touch_last.x - s_touch_origin.x;
+  calc_ui_set_hint(hint, travel < 0 ? -travel : travel);
   calc_ui_mark_dirty();
 }
 
