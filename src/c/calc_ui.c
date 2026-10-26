@@ -31,6 +31,20 @@
 #define STATE_TRIANGLE_H 6
 #define STATE_TRIANGLE_BOTTOM_MARGIN 7
 
+// Press-preview bubble geometry. It's a little larger than a key's draw rect
+// (46x41 on Emery) and floats BUBBLE_LIFT px above the key so the fingertip
+// doesn't cover it. Where there's no room for that (top rows, round bezel) it
+// slides down toward the key, as far as overlapping its top edge by
+// BUBBLE_OVERLAP; beyond that (the C key) it moves BUBBLE_LIFT px beside the
+// key instead. BUBBLE_MAX_NUDGE bounds the inward slide used to keep it clear
+// of the edges (and the bezel on round).
+#define BUBBLE_W 56
+#define BUBBLE_H 50
+#define BUBBLE_LIFT 20
+#define BUBBLE_OVERLAP 6
+#define BUBBLE_BORDER 2
+#define BUBBLE_MAX_NUDGE 48
+
 // Colors
 #define COLOR_BG GColorBlack
 #define COLOR_DISPLAY_BG GColorWhite
@@ -78,9 +92,6 @@
 static Layer *s_ui_layer = NULL;
 static CalcEngine *s_engine = NULL;
 static int s_pressed_index = -1;
-// When the pressed button's gesture has been dragged to a cancel position, it
-// stays highlighted but in a muted grey rather than the committing white.
-static bool s_pressed_cancel = false;
 
 // ---------------------------------------------------------------------------
 // Drawing helpers
@@ -139,10 +150,10 @@ static const char *prv_shorten_repeating(const char *str, char *buf,
 }
 
 static void prv_get_button_colors(const CalcButton *btn, bool pressed,
-                                  bool cancel, bool second_active, GColor *bg,
+                                  bool second_active, GColor *bg,
                                   GColor *text) {
   if (pressed) {
-    *bg = cancel ? GColorLightGray : GColorWhite;
+    *bg = GColorWhite;
     *text = GColorBlack;
     return;
   }
@@ -354,6 +365,121 @@ static void prv_draw_state_triangle(GContext *ctx, GPoint center, bool down) {
   gpath_draw_filled(ctx, *path);
 }
 
+// Draws a key's face (label, icon, state indicators) into rect, over a bg the
+// caller has already filled. Shared by the grid and the press-preview bubble.
+static void prv_draw_button_content(GContext *ctx, const CalcButton *btn,
+                                    int index, GRect fill_rect, GColor bg,
+                                    GColor text) {
+  bool rpn = s_engine->rpn_mode;
+  bool second = s_engine->second_active;
+  CalcAction effective_action = calc_button_get_action(btn, rpn);
+  const CalcFonts *fonts = calc_fonts_get();
+
+  // C/DEL button: dynamic icon or label based on engine entry state.
+  if (index == CALC_BUTTON_INDEX_CL) {
+    if (s_engine->entering) {
+      calc_icons_draw(ctx, CALC_ICON_BACKSPACE, fill_rect, text, bg);
+    } else {
+      const char *clabel = s_engine->just_cleared ? "AC" : "C";
+      int text_y = fill_rect.origin.y + (fill_rect.size.h - 24) / 2 - 6;
+      graphics_context_set_text_color(ctx, text);
+      graphics_draw_text(
+          ctx, clabel, fonts->button_label,
+          GRect(fill_rect.origin.x, text_y, fill_rect.size.w, 24),
+          GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    }
+    return;
+  }
+
+  // Icons take precedence over labels, except in RPN mode when an explicit
+  // rpn_label is set (e.g. ENTER overrides the = icon).
+  bool show_icon =
+      (btn->icon != CALC_ICON_NONE) && !(rpn && btn->rpn_label != NULL);
+  if (show_icon) {
+    calc_icons_draw(ctx, btn->icon, fill_rect, text, bg);
+    return;
+  }
+
+  // Draw label
+  const char *label = calc_button_get_label(btn, rpn, second);
+  // DRG key shows the CURRENT angle mode; pressing it flips.
+  if (effective_action == CALC_ACTION_DRG_TOGGLE) {
+    label = s_engine->deg_mode ? "DEG" : "RAD";
+  }
+  graphics_context_set_text_color(ctx, text);
+
+  GFont font;
+  int text_h;
+  int y_offset;
+
+  // CALC_ACTION_DIGIT_0 is 0 and DOT immediately follows DIGIT_9, so this
+  // range check covers exactly the digit and decimal-point keys.
+  bool is_digit_key = effective_action <= CALC_ACTION_DOT;
+  // INV/DEG/RAD/→HMS/CLST/ROLL read better a size down even though they'd
+  // fit at the big size — everything else falls back to the small font
+  // only if the big-font rendering would overflow the button, so any
+  // future long label (ENTER, DROP, LASTx, ...) self-adjusts without
+  // needing to be special-cased here.
+  bool force_small_font = effective_action == CALC_ACTION_2ND_TOGGLE ||
+                          effective_action == CALC_ACTION_DRG_TOGGLE ||
+                          effective_action == CALC_ACTION_TO_HMS ||
+                          effective_action == CALC_ACTION_STACK_CLEAR ||
+                          effective_action == CALC_ACTION_ROLL_DOWN ||
+                          effective_action == CALC_ACTION_ROLL_UP;
+  if (is_digit_key) {
+    // Digit and decimal-point keys get the big LECO number font.
+    font = fonts->button_num;
+    text_h = 32;
+    y_offset = -5;
+  } else {
+    const GRect measure_box = GRect(0, 0, 200, 40);
+    GSize label_sz = graphics_text_layout_get_content_size(
+        label, fonts->button_label, measure_box, GTextOverflowModeWordWrap,
+        GTextAlignmentCenter);
+    if (force_small_font || label_sz.w > fill_rect.size.w) {
+      font = fonts->button_label_small;
+      text_h = 18;
+      y_offset = -2;
+    } else {
+      font = fonts->button_label;
+      text_h = 24;
+      y_offset = -6;
+    }
+  }
+
+  // Center text in button
+  int text_y = fill_rect.origin.y + (fill_rect.size.h - text_h) / 2 + y_offset;
+  graphics_draw_text(
+      ctx, label, font,
+      GRect(fill_rect.origin.x, text_y, fill_rect.size.w, text_h),
+      GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+
+  // State-indicator dots, replacing the INV/DEG-RAD chips that used to
+  // live in the display area.
+  int dot_y = fill_rect.origin.y + STATE_DOT_TOP_MARGIN;
+  int center_x = fill_rect.origin.x + fill_rect.size.w / 2;
+  if (effective_action == CALC_ACTION_2ND_TOGGLE) {
+    // INV: one dot, filled when toggled on, hollow ring otherwise.
+    prv_draw_state_dot(ctx, GPoint(center_x, dot_y), second);
+  } else if (effective_action == CALC_ACTION_DRG_TOGGLE) {
+    // DEG/RAD: two dots, the active mode's dot is filled; the other is a
+    // hollow ring.
+    int deg_x = center_x - STATE_DOT_SPACING / 2;
+    int rad_x = center_x + STATE_DOT_SPACING / 2;
+    prv_draw_state_dot(ctx, GPoint(deg_x, dot_y), s_engine->deg_mode);
+    prv_draw_state_dot(ctx, GPoint(rad_x, dot_y), !s_engine->deg_mode);
+  } else if (effective_action == CALC_ACTION_ROLL_DOWN ||
+             effective_action == CALC_ACTION_ROLL_UP) {
+    // ROLL: a small triangle near the bottom points the roll direction.
+    // The down/up chevrons aren't vertically symmetric around their
+    // anchor point, so each gets its own nudge to land in the same spot.
+    bool down = effective_action == CALC_ACTION_ROLL_DOWN;
+    int tri_y = fill_rect.origin.y + fill_rect.size.h -
+                STATE_TRIANGLE_BOTTOM_MARGIN + (down ? -3 : 2);
+    prv_draw_state_triangle(ctx, GPoint(center_x, tri_y), down);
+  }
+}
+
 static void prv_draw_buttons(GContext *ctx, GRect bounds) {
   if (!s_engine)
     return;
@@ -361,8 +487,6 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
   bool rpn = s_engine->rpn_mode;
   bool second = s_engine->second_active;
   int page = s_engine->page;
-
-  const CalcFonts *fonts = calc_fonts_get();
 
   for (int i = 0; i < count; i++) {
     const CalcButton *btn = calc_buttons_get(page, i);
@@ -376,121 +500,110 @@ static void prv_draw_buttons(GContext *ctx, GRect bounds) {
       continue;
     }
 
-    bool pressed = (i == s_pressed_index);
-    bool cancel = pressed && s_pressed_cancel;
     GColor bg, text;
-    prv_get_button_colors(btn, pressed, cancel, second, &bg, &text);
+    prv_get_button_colors(btn, i == s_pressed_index, second, &bg, &text);
 
     // Fill button background
     graphics_context_set_fill_color(ctx, bg);
     GRect fill_rect = calc_buttons_get_button_draw_rect(btn);
     graphics_fill_rect(ctx, fill_rect, 8, GCornersAll);
 
-    // C/DEL button: dynamic icon or label based on engine entry state.
-    if (i == CALC_BUTTON_INDEX_CL) {
-      if (s_engine->entering) {
-        calc_icons_draw(ctx, CALC_ICON_BACKSPACE, fill_rect, text, bg);
-      } else {
-        const char *clabel = s_engine->just_cleared ? "AC" : "C";
-        int text_y = fill_rect.origin.y + (fill_rect.size.h - 24) / 2 - 6;
-        graphics_context_set_text_color(ctx, text);
-        graphics_draw_text(
-            ctx, clabel, fonts->button_label,
-            GRect(fill_rect.origin.x, text_y, fill_rect.size.w, 24),
-            GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    prv_draw_button_content(ctx, btn, i, fill_rect, bg, text);
+  }
+}
+
+// Whether rect lies entirely on the visible screen. On round displays the
+// corners must also fall inside the circle (less a small margin).
+static bool prv_rect_on_screen(GRect r, GRect bounds) {
+  if (r.origin.x < 0 || r.origin.y < 0 ||
+      r.origin.x + r.size.w > bounds.size.w ||
+      r.origin.y + r.size.h > bounds.size.h) {
+    return false;
+  }
+#if defined(PBL_ROUND)
+  const int cx = bounds.size.w / 2;
+  const int cy = bounds.size.h / 2;
+  const int radius = bounds.size.w / 2 - 2;
+  const int xs[2] = {r.origin.x, r.origin.x + r.size.w};
+  const int ys[2] = {r.origin.y, r.origin.y + r.size.h};
+  for (int i = 0; i < 2; i++) {
+    for (int j = 0; j < 2; j++) {
+      int dx = xs[i] - cx;
+      int dy = ys[j] - cy;
+      if (dx * dx + dy * dy > radius * radius) {
+        return false;
       }
-      continue;
-    }
-
-    // Icons take precedence over labels, except in RPN mode when an explicit
-    // rpn_label is set (e.g. ENTER overrides the = icon).
-    bool show_icon =
-        (btn->icon != CALC_ICON_NONE) && !(rpn && btn->rpn_label != NULL);
-    if (show_icon) {
-      calc_icons_draw(ctx, btn->icon, fill_rect, text, bg);
-      continue;
-    }
-
-    // Draw label
-    const char *label = calc_button_get_label(btn, rpn, second);
-    // DRG key shows the CURRENT angle mode; pressing it flips.
-    if (effective_action == CALC_ACTION_DRG_TOGGLE) {
-      label = s_engine->deg_mode ? "DEG" : "RAD";
-    }
-    graphics_context_set_text_color(ctx, text);
-
-    GFont font;
-    int text_h;
-    int y_offset;
-
-    // CALC_ACTION_DIGIT_0 is 0 and DOT immediately follows DIGIT_9, so this
-    // range check covers exactly the digit and decimal-point keys.
-    bool is_digit_key = effective_action <= CALC_ACTION_DOT;
-    // INV/DEG/RAD/→HMS/CLST/ROLL read better a size down even though they'd
-    // fit at the big size — everything else falls back to the small font
-    // only if the big-font rendering would overflow the button, so any
-    // future long label (ENTER, DROP, LASTx, ...) self-adjusts without
-    // needing to be special-cased here.
-    bool force_small_font = effective_action == CALC_ACTION_2ND_TOGGLE ||
-                            effective_action == CALC_ACTION_DRG_TOGGLE ||
-                            effective_action == CALC_ACTION_TO_HMS ||
-                            effective_action == CALC_ACTION_STACK_CLEAR ||
-                            effective_action == CALC_ACTION_ROLL_DOWN ||
-                            effective_action == CALC_ACTION_ROLL_UP;
-    if (is_digit_key) {
-      // Digit and decimal-point keys get the big LECO number font.
-      font = fonts->button_num;
-      text_h = 32;
-      y_offset = -5;
-    } else {
-      const GRect measure_box = GRect(0, 0, 200, 40);
-      GSize label_sz = graphics_text_layout_get_content_size(
-          label, fonts->button_label, measure_box, GTextOverflowModeWordWrap,
-          GTextAlignmentCenter);
-      if (force_small_font || label_sz.w > fill_rect.size.w) {
-        font = fonts->button_label_small;
-        text_h = 18;
-        y_offset = -2;
-      } else {
-        font = fonts->button_label;
-        text_h = 24;
-        y_offset = -6;
-      }
-    }
-
-    // Center text in button
-    int text_y =
-        fill_rect.origin.y + (fill_rect.size.h - text_h) / 2 + y_offset;
-    graphics_draw_text(
-        ctx, label, font,
-        GRect(fill_rect.origin.x, text_y, fill_rect.size.w, text_h),
-        GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-
-    // State-indicator dots, replacing the INV/DEG-RAD chips that used to
-    // live in the display area.
-    int dot_y = fill_rect.origin.y + STATE_DOT_TOP_MARGIN;
-    int center_x = fill_rect.origin.x + fill_rect.size.w / 2;
-    if (effective_action == CALC_ACTION_2ND_TOGGLE) {
-      // INV: one dot, filled when toggled on, hollow ring otherwise.
-      prv_draw_state_dot(ctx, GPoint(center_x, dot_y), second);
-    } else if (effective_action == CALC_ACTION_DRG_TOGGLE) {
-      // DEG/RAD: two dots, the active mode's dot is filled; the other is a
-      // hollow ring.
-      int deg_x = center_x - STATE_DOT_SPACING / 2;
-      int rad_x = center_x + STATE_DOT_SPACING / 2;
-      prv_draw_state_dot(ctx, GPoint(deg_x, dot_y), s_engine->deg_mode);
-      prv_draw_state_dot(ctx, GPoint(rad_x, dot_y), !s_engine->deg_mode);
-    } else if (effective_action == CALC_ACTION_ROLL_DOWN ||
-               effective_action == CALC_ACTION_ROLL_UP) {
-      // ROLL: a small triangle near the bottom points the roll direction.
-      // The down/up chevrons aren't vertically symmetric around their
-      // anchor point, so each gets its own nudge to land in the same spot.
-      bool down = effective_action == CALC_ACTION_ROLL_DOWN;
-      int tri_y = fill_rect.origin.y + fill_rect.size.h -
-                  STATE_TRIANGLE_BOTTOM_MARGIN + (down ? -3 : 2);
-      prv_draw_state_triangle(ctx, GPoint(center_x, tri_y), down);
     }
   }
+#endif
+  return true;
+}
+
+// Try to place r on screen: from its preferred spot, slide it down (to at
+// most max_y) and horizontally toward the screen's center (by at most
+// BUBBLE_MAX_NUDGE px), taking the first position that fits — so it stays as
+// close to where it was asked to be as possible. Returns false if none fits.
+static bool prv_fit_bubble(GRect *r, GRect bounds, int max_y) {
+  const int cx = bounds.size.w / 2;
+  const int center = r->origin.x + r->size.w / 2;
+  const int dir = (center < cx) ? 1 : -1;
+  int y = r->origin.y < 0 ? 0 : r->origin.y;
+  for (; y <= max_y; y += 2) {
+    for (int nudge = 0; nudge <= BUBBLE_MAX_NUDGE; nudge += 2) {
+      GRect t = GRect(r->origin.x + dir * nudge, y, r->size.w, r->size.h);
+      if (prv_rect_on_screen(t, bounds)) {
+        *r = t;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// The press-preview bubble: an unoccluded copy of the key under the finger,
+// drawn above it (or beside it, for keys with no room above) so you can see
+// what liftoff will commit — the key itself is hidden under your fingertip.
+static void prv_draw_bubble(GContext *ctx, GRect bounds) {
+  if (!s_engine || s_pressed_index < 0)
+    return;
+  const CalcButton *btn = calc_buttons_get(s_engine->page, s_pressed_index);
+  if (!btn || btn->style == BUTTON_STYLE_NONE)
+    return;
+
+  GRect key = calc_buttons_get_button_draw_rect(btn);
+  const int key_cx = key.origin.x + key.size.w / 2;
+  const int key_cy = key.origin.y + key.size.h / 2;
+
+  // Above the key; failing that, beside it.
+  GRect above = GRect(key_cx - BUBBLE_W / 2,
+                      key.origin.y - BUBBLE_LIFT - BUBBLE_H, BUBBLE_W,
+                      BUBBLE_H);
+  GRect right = GRect(key.origin.x + key.size.w + BUBBLE_LIFT,
+                      key_cy - BUBBLE_H / 2, BUBBLE_W, BUBBLE_H);
+  GRect left = GRect(key.origin.x - BUBBLE_LIFT - BUBBLE_W,
+                     key_cy - BUBBLE_H / 2, BUBBLE_W, BUBBLE_H);
+  GRect r = above;
+  if (!prv_fit_bubble(&r, bounds, key.origin.y + BUBBLE_OVERLAP - BUBBLE_H)) {
+    r = right;
+    if (!prv_fit_bubble(&r, bounds, right.origin.y + BUBBLE_H)) {
+      r = left;
+      if (!prv_fit_bubble(&r, bounds, left.origin.y + BUBBLE_H)) {
+        r = above; // nothing fits cleanly; let it clip
+      }
+    }
+  }
+
+  GColor bg, text;
+  prv_get_button_colors(btn, false, s_engine->second_active, &bg, &text);
+
+  // Black outline separates the bubble from whatever it overlaps (the white
+  // display band or neighbouring keys of the same colour).
+  graphics_context_set_fill_color(ctx, COLOR_BG);
+  graphics_fill_rect(ctx, grect_inset(r, GEdgeInsets(-BUBBLE_BORDER)),
+                     10 + BUBBLE_BORDER, GCornersAll);
+  graphics_context_set_fill_color(ctx, bg);
+  graphics_fill_rect(ctx, r, 10, GCornersAll);
+  prv_draw_button_content(ctx, btn, s_pressed_index, r, bg, text);
 }
 
 // ---------------------------------------------------------------------------
@@ -509,6 +622,9 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
 
   // Draw button grid
   prv_draw_buttons(ctx, bounds);
+
+  // Press preview floats over everything else.
+  prv_draw_bubble(ctx, bounds);
 }
 
 // ---------------------------------------------------------------------------
@@ -530,10 +646,7 @@ void calc_ui_destroy(Layer *layer) {
   }
 }
 
-void calc_ui_set_pressed(int button_index, bool cancel) {
-  s_pressed_index = button_index;
-  s_pressed_cancel = cancel;
-}
+void calc_ui_set_pressed(int button_index) { s_pressed_index = button_index; }
 
 void calc_ui_set_engine(CalcEngine *engine) { s_engine = engine; }
 

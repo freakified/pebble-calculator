@@ -9,9 +9,9 @@ Layer *calc_ui_create(GRect bounds);
 // Destroy the UI layer
 void calc_ui_destroy(Layer *layer);
 
-// Set which button is currently pressed (-1 = none). When cancel is true the
-// button stays highlighted but muted, signalling that liftoff here won't fire.
-void calc_ui_set_pressed(int button_index, bool cancel);
+// Set which button is currently pressed (-1 = none). The pressed key is
+// highlighted and previewed in a bubble above the finger.
+void calc_ui_set_pressed(int button_index);
 
 // Set reference to the engine (for reading display values)
 void calc_ui_set_engine(CalcEngine *engine);
