@@ -18,11 +18,10 @@ static CalcEngine s_engine;
 //    the touched key is previewed and a liftoff now is a plain tap.
 //  - KEYS: pressing a key. The target follows the finger (slide-to-correct,
 //    like the iOS keyboard) but only among the touched key's neighbours, since
-//    real mistaps are off by one. Straying further turns a horizontal drag
-//    into a swipe and anything else into a cancel.
-//  - SWIPE: a page flip, entered by a fast horizontal start or a long
-//    horizontal drag. Pulling back from the furthest point reached disarms it
-//    (see SWIPE_RETREAT_PX), cancelling the whole gesture.
+//    real mistaps are off by one. Straying further is a cancel.
+//  - SWIPE: a page flip, entered only by a fast horizontal flick from touchdown.
+//    Pulling back from the furthest point reached disarms it (see
+//    SWIPE_RETREAT_PX), cancelling the whole gesture.
 //  - CANCELLED: a disarmed swipe, or a touch that only woke the backlight.
 //    Nothing is shown and liftoff does nothing.
 // The UI always shows what liftoff will do — the key's preview bubble, the
@@ -70,10 +69,10 @@ static int s_debug_updates; // position updates seen in the current gesture
 // that got there within ONSET_MS with horizontal travel dominating vertical by
 // SWIPE_DOMINANCE_NUM/DEN is a flick (SWIPE); anything slower or more vertical
 // is a press (KEYS). A finger still within ONSET_PX after ONSET_MS is a press.
-#define ONSET_PX 10
+#define ONSET_PX 25
 #define ONSET_MS 120
-#define SWIPE_DOMINANCE_NUM 3
-#define SWIPE_DOMINANCE_DEN 2
+#define SWIPE_DOMINANCE_NUM 2
+#define SWIPE_DOMINANCE_DEN 1
 
 // An armed SWIPE disarms (cancelling the gesture) once the finger pulls back
 // SWIPE_RETREAT_PX from the furthest point it reached, or back past where it
@@ -174,24 +173,13 @@ static void prv_arm_swipe(int dx) {
 }
 
 // KEYS mode: retarget to the key under the finger, within the touched key's
-// neighbourhood. Leaving the neighbourhood horizontally becomes a SWIPE (when
-// swipe paging is on); leaving it any other way, dragging off the screen, or
+// neighbourhood. Leaving the neighbourhood, dragging off the screen, or
 // sitting over no key at all (the display, an empty slot) is a cancel.
 static void prv_update_keys(GPoint p) {
-  int dx = p.x - s_touch_origin.x;
-  int dy = p.y - s_touch_origin.y;
   GPoint hp = prv_hit_point(p);
   GRect hood = grect_inset(s_touch_home, GEdgeInsets(-(CALC_CELL_H + TOUCH_SLOP_PX),
                                                      -(CALC_CELL_W + TOUCH_SLOP_PX)));
-  if (!grect_contains_point(&hood, &hp)) {
-    if (calc_settings_swipe_paging_enabled() && prv_travel_horizontal(dx, dy)) {
-      prv_arm_swipe(dx);
-    } else {
-      prv_set_target(-1, CALC_HINT_NONE);
-    }
-    return;
-  }
-  if (prv_dragged_off_edge()) {
+  if (!grect_contains_point(&hood, &hp) || prv_dragged_off_edge()) {
     prv_set_target(-1, CALC_HINT_NONE);
     return;
   }
